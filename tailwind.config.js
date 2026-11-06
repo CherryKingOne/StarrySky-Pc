@@ -1,0 +1,132 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: 'class',
+  content: ['./src/renderer/index.html', './src/renderer/src/**/*.{vue,ts}'],
+  safelist: [
+    'bg-avatar-1',
+    'bg-avatar-2',
+    'bg-avatar-3',
+    'bg-avatar-4',
+    'bg-avatar-5',
+    'bg-avatar-6'
+  ],
+  theme: {
+    extend: {
+      colors: {
+        canvas: 'var(--canvas)',
+        background: 'var(--bg-primary)',
+        panel: 'var(--bg-secondary)',
+        tertiary: 'var(--bg-tertiary)',
+        sidebar: 'var(--bg-sidebar)',
+        input: 'var(--bg-input)',
+        'item-hover': 'var(--bg-item-hover)',
+        'item-normal': 'var(--bg-item-normal)',
+        'item-top': 'var(--bg-item-top)',
+        'item-selected': 'var(--bg-item-selected)',
+        'conv-active': 'var(--bg-conv-active)',
+        'selected-alt': 'var(--bg-selected-alt)',
+        'info-panel': 'var(--bg-info-panel)',
+        'message-in': 'var(--bg-message-in)',
+        'message-out': 'var(--bg-message-out)',
+        'message-quoted': 'var(--bg-message-quoted)',
+        'message-selected': 'var(--bg-message-selected)',
+        modal: 'var(--bg-modal)',
+        placeholder: 'var(--bg-placeholder)',
+        tooltip: 'var(--bg-tooltip)',
+        action: 'var(--bg-action)',
+        voip: 'var(--bg-voip)',
+        badge: 'var(--bg-badge)',
+        accent: 'var(--accent-color)',
+        'accent-active': 'var(--accent-active)',
+        'accent-subtle': 'var(--accent-subtle)',
+        foreground: 'var(--text-primary)',
+        'muted-foreground': 'var(--text-secondary)',
+        'secondary-foreground': 'var(--text-secondary-strong)',
+        'tertiary-foreground': 'var(--text-tertiary)',
+        'time-foreground': 'var(--text-time)',
+        'hint-foreground': 'var(--text-hint)',
+        'placeholder-foreground': 'var(--text-placeholder)',
+        link: 'var(--text-link)',
+        'link-hover': 'var(--text-link-hover)',
+        'on-accent': 'var(--text-on-accent)',
+        destructive: 'var(--text-danger)',
+        warning: 'var(--text-warning)',
+        'muted-text': 'var(--text-muted)',
+        icon: 'var(--icon-secondary)',
+        'icon-hover': 'var(--icon-hover-bg)',
+        overlay: 'var(--overlay)',
+        scrollbar: 'var(--scrollbar-thumb)',
+        'avatar-1': 'var(--avatar-1)',
+        'avatar-2': 'var(--avatar-2)',
+        'avatar-3': 'var(--avatar-3)',
+        'avatar-4': 'var(--avatar-4)',
+        'avatar-5': 'var(--avatar-5)',
+        'avatar-6': 'var(--avatar-6)',
+        'status-success': 'var(--status-success)',
+        'status-error': 'var(--status-error)',
+        'status-warning': 'var(--status-warning)',
+        'status-info': 'var(--status-info)',
+        border: 'var(--border-primary)',
+        divider: 'var(--border-separator)',
+        'border-soft': 'var(--border-secondary)',
+        'border-subtle': 'var(--border-subtle)',
+        'border-strong': 'var(--border-strong)',
+        'border-muted': 'var(--border-muted)',
+        'border-tertiary': 'var(--border-tertiary)',
+        'border-active': 'var(--border-active)'
+      },
+      borderColor: {
+        DEFAULT: 'var(--border-primary)',
+        divider: 'var(--border-separator)',
+        subtle: 'var(--border-subtle)',
+        soft: 'var(--border-secondary)',
+        strong: 'var(--border-strong)',
+        muted: 'var(--border-muted)',
+        tertiary: 'var(--border-tertiary)',
+        active: 'var(--border-active)'
+      },
+      textColor: {
+        DEFAULT: 'var(--text-primary)'
+      },
+      fontSize: {
+        display: ['24px', { lineHeight: '32px', fontWeight: '500' }],
+        page: ['20px', { lineHeight: '28px', fontWeight: '500' }],
+        section: ['16px', { lineHeight: '24px', fontWeight: '500' }],
+        label: ['14px', { lineHeight: '20px', fontWeight: '500' }],
+        message: ['13px', { lineHeight: '19.5px', fontWeight: '400' }],
+        small: ['13px', { lineHeight: '20px', fontWeight: '400' }],
+        caption: ['12px', { lineHeight: '18px', fontWeight: '400' }],
+        micro: ['11px', { lineHeight: '16px', fontWeight: '400' }]
+      },
+      spacing: {
+        sidebar: '60px',
+        panel: '261px',
+        header: '60px',
+        item: '68px',
+        info: '266px',
+        input: '200px',
+        row: '50px',
+        'gap-xs': '4px',
+        'gap-sm': '8px',
+        'gap-md': '12px'
+      },
+      borderRadius: {
+        sm: '4px',
+        md: '8px',
+        window: '10px',
+        lg: '12px',
+        badge: '12px'
+      },
+      boxShadow: {
+        card: '0 4px 8px rgba(0, 0, 0, 0.2)',
+        popover: '5px 5px 20px #c0c0c0',
+        window: '0 20px 50px rgba(0, 0, 0, 0.08), 0 10px 20px rgba(0, 0, 0, 0.04)',
+        accent: '0 4px 12px rgba(31, 100, 228, 0.3)'
+      },
+      fontFamily: {
+        sans: ['PingFang SC', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif']
+      }
+    }
+  },
+  plugins: []
+}

@@ -1,0 +1,234 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  野火-pc 设计令牌（Light / Dark）
+  变量名与 Ardot 设计稿 Color 变量集一一对应；
+  所有颜色必须通过 Tailwind 令牌类使用，禁止硬编码色值。
+*/
+:root {
+  --canvas: #edf0f6;
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f3f3f3;
+  --bg-sidebar: #e9e9e9;
+  --bg-input: #eeeeee;
+  --bg-item-hover: #eaeaea;
+  --bg-item-normal: #f8f8f8;
+  --bg-item-top: #e3e3e5;
+  --bg-item-selected: #e3f2fd;
+  --bg-conv-active: #d6e4fb;
+  --bg-selected-alt: #dbe1f0;
+  --bg-info-panel: rgba(255, 255, 255, 0.898);
+  --bg-message-in: #ffffff;
+  --bg-message-out: #409cff;
+  --bg-message-quoted: #e1e1e1;
+  --bg-message-selected: #e7e7e7;
+  --bg-modal: #ffffff;
+  --bg-placeholder: #d6d6d6;
+  --bg-tooltip: #fcfcfc;
+  --bg-action: #202020;
+  --bg-voip: #2e2e2e;
+  --bg-badge: #ff0000;
+  --accent-color: #1f64e4;
+  --accent-active: #3f64e4;
+  --accent-subtle: #daeafe;
+
+  --text-primary: #262626;
+  --text-secondary: #707070;
+  --text-secondary-strong: #666666;
+  --text-tertiary: #999999;
+  --text-time: #a0a0a0;
+  --text-hint: #808080;
+  --text-placeholder: #a8a8a8;
+  --text-link: #1f64e4;
+  --text-link-hover: #3f64e4;
+  --text-on-accent: #ffffff;
+  --text-danger: #ed4c4d;
+  --text-warning: #f0a040;
+  --text-muted: #666666;
+
+  --border-primary: #e5e5e5;
+  --border-secondary: #eeeeee;
+  --border-separator: #f2f2f2;
+  --border-subtle: #f5f5f5;
+  --border-strong: #d9d9d9;
+  --border-muted: #e4e4e4;
+  --border-tertiary: #ececec;
+  --border-active: #4168e0;
+
+  --icon-secondary: #868686;
+  --icon-hover-bg: #d7d7d5;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --scrollbar-thumb: #c1c1c1;
+
+  --status-success: #4caf50;
+  --status-error: #f95569;
+  --status-warning: #fd802e;
+  --status-info: #3570fe;
+
+  --avatar-1: #4a7cf7;
+  --avatar-2: #f2994a;
+  --avatar-3: #27ae60;
+  --avatar-4: #9b51e0;
+  --avatar-5: #2d9cdb;
+  --avatar-6: #eb5757;
+}
+
+.dark {
+  --canvas: #1a1a1c;
+  --bg-primary: #1c1c1e;
+  --bg-secondary: #2c2c2e;
+  --bg-tertiary: #252527;
+  --bg-sidebar: #2c2c2e;
+  --bg-input: #3a3a3c;
+  --bg-item-hover: rgba(255, 255, 255, 0.08);
+  --bg-item-normal: rgba(0, 0, 0, 0);
+  --bg-item-top: rgba(255, 255, 255, 0.03);
+  --bg-item-selected: #007aff;
+  --bg-conv-active: rgba(10, 132, 255, 0.28);
+  --bg-selected-alt: #2d3d5d;
+  --bg-info-panel: rgba(28, 28, 30, 0.9);
+  --bg-message-in: #2c2c2e;
+  --bg-message-out: #409cff;
+  --bg-message-quoted: #3a3a3c;
+  --bg-message-selected: #121212;
+  --bg-modal: #2c2c2e;
+  --bg-placeholder: #3a3a3c;
+  --bg-tooltip: #323232;
+  --bg-action: #202020;
+  --bg-voip: #2e2e2e;
+  --bg-badge: #ff453a;
+  --accent-color: #0a84ff;
+  --accent-active: #40a9ff;
+  --accent-subtle: rgba(10, 132, 255, 0.15);
+
+  --text-primary: #e0e0e4;
+  --text-secondary: #9898a0;
+  --text-secondary-strong: #b0b0b8;
+  --text-tertiary: #808088;
+  --text-time: #808088;
+  --text-hint: #8e8e93;
+  --text-placeholder: #8e8e93;
+  --text-link: #0a84ff;
+  --text-link-hover: #40a9ff;
+  --text-on-accent: #ffffff;
+  --text-danger: #ff453a;
+  --text-warning: #ffd60a;
+  --text-muted: #86868b;
+
+  --border-primary: rgba(255, 255, 255, 0.1);
+  --border-secondary: rgba(255, 255, 255, 0.08);
+  --border-separator: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-strong: #48484a;
+  --border-muted: #3a3a3c;
+  --border-tertiary: rgba(255, 255, 255, 0.05);
+  --border-active: #0a84ff;
+
+  --icon-secondary: #8e8e93;
+  --icon-hover-bg: #5a5a5b;
+  --overlay: rgba(0, 0, 0, 0.75);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+
+  --status-success: #32d74b;
+  --status-error: #ff453a;
+  --status-warning: #ffd60a;
+  --status-info: #64d2ff;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  html {
+    font-family: theme('fontFamily.sans');
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased select-none;
+    overflow: hidden;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* 主窗口铺满全屏，无圆角无阴影（对标 QQ/微信桌面客户端） */
+  .app-window {
+    @apply bg-background overflow-hidden;
+  }
+
+  /* 常规卡片容器（登录卡片 / 设置窗口 / 用户卡片） */
+  .app-card {
+    @apply rounded-lg bg-background shadow-card overflow-hidden;
+  }
+
+  /* 圆角输入底 */
+  .app-field {
+    @apply rounded-sm bg-input text-small text-foreground placeholder:text-placeholder-foreground border border-border;
+  }
+
+  /* 主按钮 */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm bg-accent text-label text-on-accent transition-colors hover:bg-accent-active active:opacity-90 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  /* 图标按钮 */
+  .icon-button {
+    @apply inline-flex items-center justify-center rounded-md text-icon transition-colors hover:bg-item-hover hover:text-foreground;
+  }
+
+  /* 列表行（通讯录 / 收藏 / 会话项通用底） */
+  .list-row {
+    @apply relative flex items-center gap-3 px-3 transition-colors cursor-pointer hover:bg-item-hover;
+  }
+
+/* 消息气泡 */
+.bubble {
+@apply rounded-md px-3 py-2 text-message break-words;
+}
+
+  /* 区块分割线 */
+  .section-divider {
+    @apply h-px w-full bg-divider;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
