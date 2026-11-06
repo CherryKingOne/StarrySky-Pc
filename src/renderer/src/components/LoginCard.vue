@@ -141,7 +141,7 @@ function downloadApp(): void {
     <!-- 扫码登录 -->
     <template v-if="isQr">
       <div class="mt-10 flex justify-center">
-        <button type="button" class="relative block" title="模拟扫码" @click="simulateScan">
+        <button v-tooltip="'模拟扫码'" type="button" class="relative block" @click="simulateScan">
           <QrCode :key="qrKey" :size="230" :value="`starrysky://login/${qrKey}`" />
           <span
             v-if="!scanned"

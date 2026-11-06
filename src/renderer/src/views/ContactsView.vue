@@ -486,25 +486,25 @@ function onCardQr(): void {
               发消息
             </button>
             <button
+              v-tooltip="'语音通话'"
               type="button"
               class="icon-button h-9 w-9 rounded-md"
-              title="语音通话"
               @click="startCall('audio')"
             >
               <AppIcon name="ion:ios-call" :size="20" />
             </button>
             <button
+              v-tooltip="'视频通话'"
               type="button"
               class="icon-button h-9 w-9 rounded-md"
-              title="视频通话"
               @click="startCall('video')"
             >
               <AppIcon name="ion:ios-videocam" :size="20" />
             </button>
             <button
+              v-tooltip="'查看资料卡'"
               type="button"
               class="icon-button h-9 w-9 rounded-md"
-              title="查看资料卡"
               @click="openSelectedCard"
             >
               <AppIcon name="ion:person" :size="20" />

@@ -201,9 +201,9 @@ function checkUpdate(): void {
       <header class="flex h-[60px] shrink-0 items-center justify-between px-6">
         <h3 class="text-section text-foreground">{{ navTitle }}</h3>
         <button
+          v-tooltip="'关闭设置'"
           type="button"
           class="icon-button h-8 w-8 rounded-md"
-          title="关闭设置"
           @click="close"
         >
           <AppIcon name="ion:close" :size="18" />
@@ -216,9 +216,9 @@ function checkUpdate(): void {
         <template v-if="activeNav === 'account'">
           <div class="flex items-center gap-4 rounded-lg bg-panel p-4">
             <button
+              v-tooltip="'修改头像'"
               type="button"
               class="relative shrink-0"
-              title="修改头像"
               @click="showCrop = true"
             >
               <Avatar :name="nickname" :index="avatarIndex" :size="40" />

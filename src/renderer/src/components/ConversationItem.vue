@@ -27,14 +27,12 @@ function onContextMenu(event: MouseEvent, conversation: Conversation): void {
         <span class="truncate text-base text-foreground">{{ conversation.name }}</span>
         <span class="shrink-0 text-micro text-time-foreground">{{ conversation.time }}</span>
       </div>
-      <p class="mt-0.5 truncate text-caption text-tertiary-foreground">
-        {{ conversation.preview }}
-      </p>
+      <div class="mt-0.5 flex items-center justify-between gap-2">
+        <p class="min-w-0 flex-1 truncate text-caption text-tertiary-foreground">
+          {{ conversation.preview }}
+        </p>
+        <BadgeDigit v-if="conversation.unread > 0" :count="conversation.unread" class="shrink-0" />
+      </div>
     </div>
-    <BadgeDigit
-      v-if="conversation.unread > 0"
-      :count="conversation.unread"
-      class="absolute top-3 right-3"
-    />
   </div>
 </template>

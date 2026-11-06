@@ -93,18 +93,18 @@ function confirm(): void {
   >
     <div class="flex items-center justify-between px-1">
       <button
+        v-tooltip="'上个月'"
         type="button"
         class="icon-button h-7 w-7 rounded-sm"
-        title="上个月"
         @click="shiftMonth(-1)"
       >
         <AppIcon name="ion:ios-arrow-left" :size="14" />
       </button>
       <span class="text-label text-foreground">{{ monthLabel }}</span>
       <button
+        v-tooltip="'下个月'"
         type="button"
         class="icon-button h-7 w-7 rounded-sm"
-        title="下个月"
         @click="shiftMonth(1)"
       >
         <AppIcon name="ion:ios-arrow-right" :size="14" />

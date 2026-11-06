@@ -43,7 +43,7 @@ const memberCount = computed(() => {
         icon="ion:close"
         :size="18"
         :box="28"
-        title="关闭信息面板"
+        label="关闭信息面板"
         @click="emit('close')"
       />
     </div>
@@ -74,9 +74,9 @@ const memberCount = computed(() => {
         <button
           v-for="member in members.slice(0, 10)"
           :key="member.name"
+          v-tooltip="`${member.name} · ${member.role || '成员'}`"
           type="button"
           class="flex flex-col items-center gap-1"
-          :title="`${member.name} · ${member.role || '成员'}`"
           @click="emit('profile')"
         >
           <Avatar :name="member.name" :index="member.index" :size="32" :rounded="false" />

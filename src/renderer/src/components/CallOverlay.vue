@@ -173,43 +173,43 @@ function toggleShare(): void {
       <!-- 操作栏 -->
       <footer class="flex h-28 shrink-0 items-center justify-center gap-6">
         <button
+          v-tooltip="micOn ? '静音' : '取消静音'"
           type="button"
           class="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
           :class="
             micOn ? 'bg-white/10 text-on-accent hover:bg-white/20' : 'bg-danger text-on-accent'
           "
-          :title="micOn ? '静音' : '取消静音'"
           @click="toggleMic"
         >
           <AppIcon :name="micOn ? 'ion:ios-mic' : 'ion:ios-mic-off'" :size="20" />
         </button>
         <button
           v-if="isVideo"
+          v-tooltip="videoOn ? '关闭摄像头' : '开启摄像头'"
           type="button"
           class="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
           :class="
             videoOn ? 'bg-white/10 text-on-accent hover:bg-white/20' : 'bg-danger text-on-accent'
           "
-          :title="videoOn ? '关闭摄像头' : '开启摄像头'"
           @click="toggleVideo"
         >
           <AppIcon :name="videoOn ? 'ion:ios-videocam' : 'ion:videocam-off'" :size="20" />
         </button>
         <button
+          v-tooltip="'屏幕共享'"
           type="button"
           class="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
           :class="
             sharing ? 'bg-accent text-on-accent' : 'bg-white/10 text-on-accent hover:bg-white/20'
           "
-          title="屏幕共享"
           @click="toggleShare"
         >
           <AppIcon name="ion:desktop" :size="20" />
         </button>
         <button
+          v-tooltip="'挂断'"
           type="button"
           class="flex h-12 w-16 items-center justify-center rounded-full bg-danger text-on-accent transition-opacity hover:opacity-90"
-          title="挂断"
           @click="hangup"
         >
           <AppIcon name="ion:ios-call" :size="22" class="rotate-[135deg]" />

@@ -172,7 +172,6 @@ function toggleRecord(): void {
   recordTimer = setInterval(() => {
     recordSeconds.value += 1
   }, 1000)
-  emit('toast', '正在录音，再次点击结束')
 }
 
 function onToolClick(key: string): void {
@@ -257,6 +256,7 @@ onBeforeUnmount(() => {
           v-for="tool in leftTools"
           :key="tool.key"
           :ref="(el) => setToolRef(tool.key, el)"
+          v-tooltip="tool.label"
           type="button"
           class="icon-button h-10 w-10 shrink-0 rounded-sm"
           :class="
@@ -264,7 +264,6 @@ onBeforeUnmount(() => {
               ? 'bg-item-hover text-accent'
               : ''
           "
-          :title="tool.label"
           @click="onToolClick(tool.key)"
         >
           <AppIcon :name="tool.icon" :size="20" />
@@ -275,9 +274,9 @@ onBeforeUnmount(() => {
           v-for="tool in rightTools"
           :key="tool.key"
           :ref="(el) => setToolRef(tool.key, el)"
+          v-tooltip="tool.label"
           type="button"
           class="icon-button h-10 w-10 shrink-0 rounded-sm"
-          :title="tool.label"
           @click="onRightToolClick(tool.key)"
         >
           <AppIcon :name="tool.icon" :size="20" />
@@ -295,9 +294,9 @@ onBeforeUnmount(() => {
         {{ props.replyTo.text }}
       </span>
       <button
+        v-tooltip="'取消回复'"
         type="button"
         class="icon-button h-5 w-5 shrink-0 rounded-sm"
-        title="取消回复"
         @click="emit('clear-reply')"
       >
         <AppIcon name="ion:close" :size="12" />

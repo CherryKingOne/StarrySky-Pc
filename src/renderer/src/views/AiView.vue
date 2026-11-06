@@ -248,14 +248,14 @@ function onAction(key: string): void {
           icon="ion:android-add"
           :size="18"
           :box="32"
-          title="新建对话"
+          label="新建对话"
           @click="newChat"
         />
         <AppIconButton
           icon="ion:ios-trash"
           :size="18"
           :box="32"
-          title="清空对话"
+          label="清空对话"
           @click="showClear = true"
         />
       </div>

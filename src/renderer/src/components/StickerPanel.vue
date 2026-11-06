@@ -88,7 +88,12 @@ watch(
           <span class="text-small font-medium text-foreground">表情</span>
           <span class="text-micro text-tertiary-foreground">点击插入输入框</span>
         </div>
-        <button type="button" class="icon-button h-6 w-6 rounded-sm" title="关闭" @click="close">
+        <button
+          v-tooltip="'关闭'"
+          type="button"
+          class="icon-button h-6 w-6 rounded-sm"
+          @click="close"
+        >
           <AppIcon name="ion:close" :size="12" />
         </button>
       </div>

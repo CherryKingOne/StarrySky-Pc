@@ -45,14 +45,14 @@ watch(
   <Teleport to="#app">
     <div
       v-if="visible"
-      class="popup-layer pointer-events-none absolute inset-x-0 bottom-24 z-[95] flex justify-center px-4"
+      class="popup-layer pointer-events-none absolute inset-x-0 top-[72px] z-[95] flex justify-center px-4"
     >
       <div
-        class="pointer-events-auto flex items-center gap-2 rounded-md bg-action px-4 py-2.5 text-label text-on-accent shadow-popover"
+        class="flex max-w-[80%] items-center gap-2 rounded-md bg-action px-3 py-2 text-center text-small text-on-accent shadow-popover"
         role="status"
         aria-live="polite"
       >
-        <span class="text-foreground">{{ message }}</span>
+        <span class="break-words">{{ message }}</span>
       </div>
     </div>
   </Teleport>

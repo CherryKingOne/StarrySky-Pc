@@ -67,10 +67,10 @@ function onContextMenu(event: MouseEvent): void {
 
     <button
       v-else-if="message.kind === 'file'"
+      v-tooltip="'查看文件详情'"
       type="button"
       class="flex w-[260px] cursor-pointer items-center gap-3 rounded-md border px-3 py-3 text-left transition-opacity hover:opacity-90"
       :class="[bubbleBg, bubbleBorder]"
-      title="查看文件详情"
       @click="emit('open-file', message)"
     >
       <div
@@ -88,10 +88,10 @@ function onContextMenu(event: MouseEvent): void {
 
     <button
       v-else-if="message.kind === 'audio'"
+      v-tooltip="'播放语音'"
       type="button"
       class="bubble flex cursor-pointer items-center gap-3 border transition-opacity hover:opacity-90"
       :class="[bubbleBg, bubbleBorder]"
-      title="播放语音"
       @click="emit('play-audio', message)"
     >
       <AppIcon name="ion:ios-mic" :size="18" class="shrink-0 text-accent" />
@@ -108,10 +108,10 @@ function onContextMenu(event: MouseEvent): void {
 
     <button
       v-else-if="message.kind === 'image'"
+      v-tooltip="'查看大图'"
       type="button"
       class="cursor-zoom-in rounded-md border p-1 transition-transform hover:scale-[1.01]"
       :class="[bubbleBg, bubbleBorder]"
-      title="查看大图"
       @click="emit('preview', message)"
     >
       <div
@@ -174,10 +174,10 @@ function onContextMenu(event: MouseEvent): void {
 
     <button
       v-else-if="message.kind === 'forward'"
+      v-tooltip="'查看合并转发内容'"
       type="button"
       class="bubble w-[280px] cursor-pointer border text-left transition-opacity hover:opacity-90"
       :class="[bubbleBg, bubbleBorder]"
-      title="查看合并转发内容"
       @click="emit('open-forward', message)"
     >
       <p class="mb-2 truncate text-small font-medium" :class="bubbleText">
@@ -199,10 +199,10 @@ function onContextMenu(event: MouseEvent): void {
 
     <button
       v-else-if="message.kind === 'card'"
+      v-tooltip="'查看名片'"
       type="button"
       class="flex w-[260px] cursor-pointer items-center gap-3 rounded-md border px-3 py-3 text-left transition-opacity hover:opacity-90"
       :class="[bubbleBg, bubbleBorder]"
-      title="查看名片"
       @click="emit('open-card', message)"
     >
       <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-selected-alt">

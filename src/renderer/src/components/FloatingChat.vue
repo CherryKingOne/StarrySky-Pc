@@ -113,17 +113,17 @@ function send(): void {
           <p class="truncate text-micro text-tertiary-foreground">会话浮窗 · 可拖动</p>
         </div>
         <button
+          v-tooltip="'在独立窗口打开'"
           type="button"
           class="icon-button h-7 w-7 rounded-sm"
-          title="在独立窗口打开"
           @click="emit('expand', conversation.id)"
         >
           <AppIcon name="ion:ios-expand" :size="16" />
         </button>
         <button
+          v-tooltip="'关闭浮窗'"
           type="button"
           class="icon-button h-7 w-7 rounded-sm"
-          title="关闭浮窗"
           @click="emit('close')"
         >
           <AppIcon name="ion:close" :size="16" />

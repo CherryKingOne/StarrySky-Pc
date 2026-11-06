@@ -68,9 +68,9 @@ watch(
           {{ active?.imageLabel || '图片预览' }}
         </p>
         <button
+          v-tooltip="'关闭预览'"
           type="button"
           class="icon-button h-8 w-8 rounded-md text-on-accent/80 hover:bg-white/10 hover:text-on-accent"
-          title="关闭预览"
           @click="emit('close')"
         >
           <AppIcon name="ion:close" :size="20" />
@@ -79,9 +79,9 @@ watch(
 
       <div class="relative flex min-h-0 flex-1 items-center justify-center px-14">
         <button
+          v-tooltip="'上一张'"
           type="button"
           class="absolute left-6 flex h-10 w-10 items-center justify-center rounded-full text-on-accent/70 transition-colors hover:bg-white/10 hover:text-on-accent disabled:opacity-30"
-          title="上一张"
           :disabled="current === 0"
           @click="prev"
         >
@@ -102,9 +102,9 @@ watch(
         </div>
 
         <button
+          v-tooltip="'下一张'"
           type="button"
           class="absolute right-6 flex h-10 w-10 items-center justify-center rounded-full text-on-accent/70 transition-colors hover:bg-white/10 hover:text-on-accent disabled:opacity-30"
-          title="下一张"
           :disabled="current >= images.length - 1"
           @click="next"
         >
@@ -116,12 +116,12 @@ watch(
         <button
           v-for="(image, thumbIndex) in images"
           :key="image.id"
+          v-tooltip="image.imageLabel"
           type="button"
           class="h-16 w-16 overflow-hidden rounded-sm border-2 transition-colors"
           :class="
             thumbIndex === current ? 'border-accent' : 'border-transparent hover:border-white/40'
           "
-          :title="image.imageLabel"
           @click="current = thumbIndex"
         >
           <div

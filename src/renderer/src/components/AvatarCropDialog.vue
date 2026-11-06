@@ -58,10 +58,10 @@ const size = computed(() => Math.round(96 * zoom.value))
         <button
           v-for="tone in TONES"
           :key="tone"
+          v-tooltip="`头像底色 ${tone}`"
           type="button"
           class="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
           :class="[`bg-avatar-${tone}`, selected === tone ? 'border-accent' : 'border-transparent']"
-          :title="`头像底色 ${tone}`"
           @click="selected = tone"
         />
       </div>

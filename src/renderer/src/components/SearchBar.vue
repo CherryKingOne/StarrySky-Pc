@@ -55,9 +55,9 @@ defineExpose({ focus })
     <button
       v-if="showAdd"
       ref="addButton"
+      v-tooltip="'更多'"
       type="button"
       class="icon-button shrink-0 h-7 w-7 rounded-md text-icon"
-      title="更多"
       @click="openAddMenu"
     >
       <AppIcon name="ion:android-add" :size="16" />

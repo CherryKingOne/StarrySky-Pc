@@ -94,9 +94,9 @@ function removeMember(memberName: string): void {
           <span class="max-w-full truncate text-micro text-foreground">{{ member.name }}</span>
           <span class="text-[10px] text-tertiary-foreground">{{ member.role || '成员' }}</span>
           <button
+            v-tooltip="'移出群聊'"
             type="button"
             class="absolute top-1 right-1 hidden h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] text-on-accent group-hover:flex"
-            title="移出群聊"
             @click="removeMember(member.name)"
           >
             ×

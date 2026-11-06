@@ -161,9 +161,9 @@ function locateContext(conversationId: string): void {
   <div v-if="conversation" class="flex h-full w-full flex-col bg-tertiary">
     <header class="flex h-[60px] shrink-0 items-center gap-3 border-b border-divider bg-panel px-4">
       <button
+        v-tooltip="'返回主窗口'"
         type="button"
         class="icon-button h-8 w-8 rounded-md"
-        title="返回主窗口"
         @click="router.push('/chats')"
       >
         <AppIcon name="ion:ios-arrow-left" :size="20" />
@@ -176,17 +176,17 @@ function locateContext(conversationId: string): void {
         </p>
       </div>
       <button
+        v-tooltip="'会话信息'"
         type="button"
         class="icon-button h-8 w-8 rounded-md"
-        title="会话信息"
         @click="showContext = true"
       >
         <AppIcon name="ion:information-circle-outline" :size="20" />
       </button>
       <button
+        v-tooltip="'合并转发'"
         type="button"
         class="icon-button h-8 w-8 rounded-md"
-        title="合并转发"
         @click="showForward = true"
       >
         <AppIcon name="ion:chatboxes" :size="20" />

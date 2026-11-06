@@ -79,9 +79,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           </slot>
           <button
             v-if="closable"
+            v-tooltip="'关闭'"
             type="button"
             class="icon-button h-7 w-7 shrink-0 rounded-md"
-            title="关闭"
             @click="emit('close')"
           >
             <AppIcon name="ion:close" :size="16" />

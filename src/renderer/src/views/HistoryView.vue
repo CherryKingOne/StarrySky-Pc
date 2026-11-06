@@ -104,9 +104,9 @@ function exportHistory(): void {
       <div class="flex h-[60px] shrink-0 items-center justify-between px-4">
         <h2 class="text-label text-foreground">按成员查看</h2>
         <button
+          v-tooltip="'返回会话'"
           type="button"
           class="icon-button h-7 w-7 rounded-sm"
-          title="返回会话"
           @click="backToChat"
         >
           <AppIcon name="ion:close" :size="16" />

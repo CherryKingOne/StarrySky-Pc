@@ -5,12 +5,14 @@ import AppIcon from '@renderer/components/AppIcon.vue'
 const props = withDefaults(
   defineProps<{
     icon: string
+    /** 悬浮气泡提示文案 */
+    label?: string
     size?: number
     box?: 28 | 32
     active?: boolean
     rounded?: 'sm' | 'md' | 'full'
   }>(),
-  { size: 20, box: 32, active: false, rounded: 'md' }
+  { label: '', size: 20, box: 32, active: false, rounded: 'md' }
 )
 
 const boxClass = computed(() => (props.box === 28 ? 'h-7 w-7' : 'h-8 w-8'))
@@ -23,6 +25,7 @@ const radiusClass = computed(() => {
 
 <template>
   <button
+    v-tooltip="label"
     type="button"
     class="icon-button shrink-0"
     :class="[boxClass, radiusClass, active ? 'text-accent' : 'text-icon']"

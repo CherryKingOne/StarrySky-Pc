@@ -102,9 +102,9 @@ function logout(): void {
   <aside class="flex h-full w-sidebar shrink-0 flex-col items-center bg-sidebar">
     <div class="mt-[68px]">
       <button
+        v-tooltip="'我的资料'"
         type="button"
         class="rounded-md transition-transform hover:scale-105"
-        title="我的资料"
         @click="showUserCard = true"
       >
         <Avatar :name="nickname.charAt(0)" :index="avatarIndex" :size="36" />
@@ -115,8 +115,8 @@ function logout(): void {
       <RouterLink
         v-for="item in items"
         :key="item.key"
+        v-tooltip="item.label"
         :to="item.to"
-        :title="item.label"
         class="relative flex h-8 w-8 items-center justify-center transition-colors"
         :class="isActive(item.to) ? 'text-accent' : 'text-icon hover:text-foreground'"
       >
@@ -132,16 +132,16 @@ function logout(): void {
     <div class="mt-auto mb-[68px] flex flex-col items-center gap-6">
       <button
         ref="moreButton"
+        v-tooltip="'更多'"
         type="button"
         class="flex h-8 w-8 items-center justify-center text-icon transition-colors hover:text-foreground"
-        title="更多"
         @click="showMoreMenu = true"
       >
         <AppIcon name="ion:ios-more" :size="24" />
       </button>
       <RouterLink
+        v-tooltip="'设置'"
         to="/settings"
-        title="设置"
         class="flex h-8 w-8 items-center justify-center text-icon transition-colors hover:text-foreground"
       >
         <AppIcon name="ion:navicon-round" :size="24" />
