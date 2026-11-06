@@ -11,6 +11,16 @@ const router = createRouter({
       component: () => import('@renderer/views/LoginView.vue')
     },
     {
+      path: '/lock',
+      name: 'lock',
+      component: () => import('@renderer/views/LockView.vue')
+    },
+    {
+      path: '/popout/:id',
+      name: 'popout',
+      component: () => import('@renderer/views/PopoutChatView.vue')
+    },
+    {
       path: '/',
       component: () => import('@renderer/layouts/MainLayout.vue'),
       redirect: '/chats',
@@ -34,6 +44,26 @@ const router = createRouter({
           path: 'ai',
           name: 'ai',
           component: () => import('@renderer/views/AiView.vue')
+        },
+        {
+          path: 'files',
+          name: 'files',
+          component: () => import('@renderer/views/FilesView.vue')
+        },
+        {
+          path: 'workbench',
+          name: 'workbench',
+          component: () => import('@renderer/views/WorkbenchView.vue')
+        },
+        {
+          path: 'search',
+          name: 'search',
+          component: () => import('@renderer/views/SearchView.vue')
+        },
+        {
+          path: 'history',
+          name: 'history',
+          component: () => import('@renderer/views/HistoryView.vue')
         }
       ]
     },
@@ -45,15 +75,37 @@ const router = createRouter({
   ]
 })
 
+const TITLES: Record<string, string> = {
+  login: '野火IM · 登录',
+  lock: '野火IM · 已锁定',
+  chats: '野火IM · 会话',
+  contacts: '野火IM · 通讯录',
+  favorites: '野火IM · 收藏',
+  ai: '野火IM · AI 助手',
+  files: '野火IM · 文件记录',
+  workbench: '野火IM · 工作台',
+  search: '野火IM · 聊天记录搜索',
+  history: '野火IM · 消息历史',
+  popout: '野火IM · 独立聊天窗',
+  settings: '野火IM · 设置'
+}
+
 router.beforeEach((to) => {
   const app = useAppStore()
+
+  if (app.locked) {
+    if (to.name === 'lock' || to.name === 'login') return true
+    return { name: 'lock' }
+  }
+
   if (!app.authenticated && to.name !== 'login') return { name: 'login' }
   if (app.authenticated && to.name === 'login') return { name: 'chats' }
+  if (to.name === 'lock') return { name: 'chats' }
   return true
 })
 
 router.afterEach((to) => {
-  document.title = to.name === 'login' ? '野火IM · 登录' : '野火IM'
+  document.title = TITLES[String(to.name ?? '')] ?? '野火IM'
 })
 
 export default router

@@ -4,12 +4,22 @@ import BadgeDigit from '@renderer/components/BadgeDigit.vue'
 import type { Conversation } from '@renderer/types'
 
 defineProps<{ conversation: Conversation; active?: boolean }>()
+
+const emit = defineEmits<{
+  contextmenu: [event: MouseEvent, conversation: Conversation]
+}>()
+
+function onContextMenu(event: MouseEvent, conversation: Conversation): void {
+  event.preventDefault()
+  emit('contextmenu', event, conversation)
+}
 </script>
 
 <template>
   <div
     class="list-row h-item w-panel"
     :class="active ? 'bg-conv-active' : 'hover:bg-item-hover'"
+    @contextmenu="onContextMenu($event, conversation)"
   >
     <Avatar :name="conversation.name" :index="conversation.avatarIndex" :size="36" />
     <div class="min-w-0 flex-1">

@@ -1,19 +1,41 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AppIcon from '@renderer/components/AppIcon.vue'
-import IconButton from '@renderer/components/IconButton.vue'
+import AddMenu from '@renderer/components/AddMenu.vue'
 
 withDefaults(
-  defineProps<{ modelValue?: string; placeholder?: string; showAdd?: boolean }>(),
+  defineProps<{
+    modelValue?: string
+    placeholder?: string
+    showAdd?: boolean
+  }>(),
   { modelValue: '', placeholder: '搜索', showAdd: true }
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string]; add: [] }>()
-const focused = ref(false)
-const input = ref<HTMLInputElement | null>(null)
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  add: [key: string]
+}>()
+
+const addButton = ref<HTMLButtonElement | null>(null)
+const showAddMenu = ref(false)
+
+function onInput(event: Event): void {
+  emit('update:modelValue', (event.target as HTMLInputElement).value)
+}
+
+function openAddMenu(): void {
+  showAddMenu.value = true
+}
+
+function onAddMenuSelect(key: string): void {
+  showAddMenu.value = false
+  emit('add', key)
+}
 
 function focus(): void {
-  input.value?.focus()
+  const input = document.querySelector<HTMLInputElement>('.search-input')
+  input?.focus()
 }
 
 defineExpose({ focus })
@@ -21,21 +43,31 @@ defineExpose({ focus })
 
 <template>
   <div class="flex h-[60px] w-panel shrink-0 items-center gap-1 bg-panel px-2">
-    <div
-      class="flex h-[25px] w-[209px] items-center gap-1 rounded-sm border bg-input px-1.5"
-      :class="focused ? 'border-accent' : 'border-border'"
-    >
+    <div class="app-field flex h-[25px] w-[209px] items-center gap-1.5">
       <AppIcon name="ion:search" :size="14" class="shrink-0 text-placeholder-foreground" />
       <input
-        ref="input"
-        :value="modelValue"
-        class="h-full w-full bg-transparent text-small text-foreground outline-none placeholder:text-placeholder-foreground"
+        class="search-input h-full w-full bg-transparent text-small text-foreground outline-none placeholder:text-placeholder-foreground"
         :placeholder="placeholder"
-        @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-        @focus="focused = true"
-        @blur="focused = false"
+        :value="modelValue"
+        @input="onInput"
       />
     </div>
-    <IconButton v-if="showAdd" icon="ion:plus" :size="16" :box="28" @click="emit('add')" />
+    <button
+      v-if="showAdd"
+      ref="addButton"
+      type="button"
+      class="icon-button shrink-0 h-7 w-7 rounded-md text-icon"
+      title="更多"
+      @click="openAddMenu"
+    >
+      <AppIcon name="ion:android-add" :size="16" />
+    </button>
+
+    <AddMenu
+      v-if="showAdd"
+      v-model:visible="showAddMenu"
+      :anchor="addButton"
+      @select="onAddMenuSelect"
+    />
   </div>
 </template>

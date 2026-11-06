@@ -7,9 +7,7 @@ import Sidebar from '@renderer/components/Sidebar.vue'
   <div class="flex h-full w-full">
     <Sidebar />
     <RouterView v-slot="{ Component }">
-      <Transition name="page-fade" mode="out-in">
-        <component :is="Component" class="flex-1 min-w-0" />
-      </Transition>
+      <component :is="Component" class="min-w-0 flex-1" />
     </RouterView>
   </div>
 </template>

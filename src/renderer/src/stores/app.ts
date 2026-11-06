@@ -1,48 +1,74 @@
 import { defineStore } from 'pinia'
 
-type Theme = 'light' | 'dark'
+export type Theme = 'light' | 'dark'
+export type LoginMode = 'qr' | 'password' | 'captcha' | 'register'
 
-function readInitialTheme(): Theme {
+function readStored(key: string): string | null {
   try {
-    return localStorage.getItem('starrysky-theme') === 'dark' ? 'dark' : 'light'
+    return localStorage.getItem(key)
   } catch {
-    return 'light'
+    return null
   }
 }
 
-function readInitialAuth(): boolean {
+function writeStored(key: string, value: string): void {
   try {
-    return localStorage.getItem('starrysky-authenticated') === '1'
+    localStorage.setItem(key, value)
   } catch {
-    return false
+    /* 隐私模式下忽略持久化失败 */
   }
+}
+
+function removeStored(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* 隐私模式下忽略持久化失败 */
+  }
+}
+
+function readInitialTheme(): Theme {
+  return readStored('starrysky-theme') === 'dark' ? 'dark' : 'light'
+}
+
+function readInitialAuth(): boolean {
+  return readStored('starrysky-authenticated') === '1'
 }
 
 export const useAppStore = defineStore('app', {
   state: () => ({
     authenticated: readInitialAuth(),
     theme: readInitialTheme() as Theme,
-    loginMode: 'qr' as 'qr' | 'password' | 'captcha' | 'register',
-    qrScanned: false
+    loginMode: 'qr' as LoginMode,
+    qrScanned: false,
+    locked: false,
+    nickname: '林晓',
+    accountId: 'linxiao',
+    phone: '138****8888',
+    avatarIndex: 1,
+    language: '简体中文'
   }),
   actions: {
     login(): void {
       this.authenticated = true
-      try {
-        localStorage.setItem('starrysky-authenticated', '1')
-      } catch {
-        /* 隐私模式下忽略持久化失败 */
-      }
+      this.locked = false
+      writeStored('starrysky-authenticated', '1')
     },
     logout(): void {
       this.authenticated = false
-      try {
-        localStorage.removeItem('starrysky-authenticated')
-      } catch {
-        /* 隐私模式下忽略持久化失败 */
-      }
+      this.locked = false
+      removeStored('starrysky-authenticated')
     },
-    setLoginMode(mode: 'qr' | 'password' | 'captcha' | 'register'): void {
+    lock(): void {
+      if (!this.authenticated) return
+      this.locked = true
+    },
+    unlock(password: string): boolean {
+      if (!password.trim()) return false
+      this.locked = false
+      return true
+    },
+    setLoginMode(mode: LoginMode): void {
       this.loginMode = mode
       this.qrScanned = false
     },
@@ -51,11 +77,13 @@ export const useAppStore = defineStore('app', {
     },
     toggleTheme(): void {
       this.theme = this.theme === 'light' ? 'dark' : 'light'
-      try {
-        localStorage.setItem('starrysky-theme', this.theme)
-      } catch {
-        /* 隐私模式下忽略持久化失败 */
-      }
+      writeStored('starrysky-theme', this.theme)
+    },
+    setAvatar(index: number): void {
+      this.avatarIndex = index
+    },
+    setLanguage(language: string): void {
+      this.language = language
     }
   }
 })

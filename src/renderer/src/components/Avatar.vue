@@ -5,7 +5,7 @@ const props = withDefaults(
   defineProps<{
     name: string
     index?: number
-    size?: 32 | 36 | 40 | 64
+    size?: 32 | 36 | 40 | 64 | 96
     rounded?: boolean
   }>(),
   { index: 1, size: 36, rounded: true }
@@ -16,6 +16,7 @@ const sizeClass = computed(() => {
   if (props.size === 32) return 'h-8 w-8 text-xs'
   if (props.size === 40) return 'h-10 w-10 text-base'
   if (props.size === 64) return 'h-16 w-16 text-2xl'
+  if (props.size === 96) return 'h-24 w-24 text-4xl'
   return 'h-9 w-9 text-sm'
 })
 const initial = computed(() => props.name.trim().charAt(0).toUpperCase() || '#')

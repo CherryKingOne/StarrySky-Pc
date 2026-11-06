@@ -30,6 +30,7 @@
   --bg-tooltip: #fcfcfc;
   --bg-action: #202020;
   --bg-voip: #2e2e2e;
+  --bg-preview: #0d0d0f;
   --bg-badge: #ff0000;
   --accent-color: #1f64e4;
   --accent-active: #3f64e4;
@@ -99,6 +100,7 @@
   --bg-tooltip: #323232;
   --bg-action: #202020;
   --bg-voip: #2e2e2e;
+  --bg-preview: #0d0d0f;
   --bg-badge: #ff453a;
   --accent-color: #0a84ff;
   --accent-active: #40a9ff;
@@ -143,6 +145,12 @@
   body,
   #app {
     height: 100%;
+  }
+
+  /* 弹层以 #app 为定位基准，保证与主窗口完全重合 */
+  #app {
+    position: relative;
+    overflow: hidden;
   }
 
   html {
@@ -216,10 +224,10 @@
     @apply relative flex items-center gap-3 px-3 transition-colors cursor-pointer hover:bg-item-hover;
   }
 
-/* 消息气泡 */
-.bubble {
-@apply rounded-md px-3 py-2 text-message break-words;
-}
+  /* 消息气泡 */
+  .bubble {
+    @apply rounded-md px-3 py-2 text-message break-words;
+  }
 
   /* 区块分割线 */
   .section-divider {
@@ -230,5 +238,14 @@
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
+  }
+
+  /* 隐藏滚动条但保留滚动能力（工具栏横向滚动） */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

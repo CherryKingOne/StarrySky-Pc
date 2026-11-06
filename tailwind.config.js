@@ -35,6 +35,7 @@ module.exports = {
         tooltip: 'var(--bg-tooltip)',
         action: 'var(--bg-action)',
         voip: 'var(--bg-voip)',
+        preview: 'var(--bg-preview)',
         badge: 'var(--bg-badge)',
         accent: 'var(--accent-color)',
         'accent-active': 'var(--accent-active)',
@@ -52,6 +53,7 @@ module.exports = {
         destructive: 'var(--text-danger)',
         warning: 'var(--text-warning)',
         'muted-text': 'var(--text-muted)',
+        danger: 'var(--text-danger)',
         icon: 'var(--icon-secondary)',
         'icon-hover': 'var(--icon-hover-bg)',
         overlay: 'var(--overlay)',
@@ -119,7 +121,9 @@ module.exports = {
       },
       boxShadow: {
         card: '0 4px 8px rgba(0, 0, 0, 0.2)',
-        popover: '5px 5px 20px #c0c0c0',
+        popover: '0 4px 16px rgba(0, 0, 0, 0.12)',
+        modal: '0 12px 40px rgba(0, 0, 0, 0.24)',
+        menu: '0 4px 12px rgba(0, 0, 0, 0.1)',
         window: '0 20px 50px rgba(0, 0, 0, 0.08), 0 10px 20px rgba(0, 0, 0, 0.04)',
         accent: '0 4px 12px rgba(31, 100, 228, 0.3)'
       },

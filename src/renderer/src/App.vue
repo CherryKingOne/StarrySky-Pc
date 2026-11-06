@@ -15,12 +15,8 @@ watch(
 </script>
 
 <template>
-  <!-- 主窗口直接铺满整个可视区，不再保留设计稿画布与缩放包装 -->
+  <!-- 主窗口直接铺满整个可视区，页面切换不做过渡，避免动画卡住导致点击无响应 -->
   <div class="app-window flex h-full w-full">
-    <RouterView v-slot="{ Component }">
-      <Transition name="page-fade" mode="out-in">
-        <component :is="Component" />
-      </Transition>
-    </RouterView>
+    <RouterView />
   </div>
 </template>
