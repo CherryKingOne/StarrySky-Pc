@@ -16,6 +16,8 @@ const props = withDefaults(
     /** 内容区是否使用默认内边距 */
     padded?: boolean
     bodyClass?: string
+    /** 是否只在父容器内显示（用于登录卡片等小窗口） */
+    contained?: boolean
   }>(),
   {
     title: '',
@@ -25,7 +27,8 @@ const props = withDefaults(
     closable: true,
     closeOnBackdrop: true,
     padded: true,
-    bodyClass: ''
+    bodyClass: '',
+    contained: false
   }
 )
 
@@ -53,7 +56,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
 <template>
   <!-- 统一弹窗容器：挂载在 #app 上，始终相对主窗口居中，避免位置偏移 -->
-  <Teleport to="#app">
+  <Teleport to="#app" :disabled="contained">
     <div
       v-if="visible"
       class="popup-layer absolute inset-0 z-[80] flex items-center justify-center bg-overlay p-6"

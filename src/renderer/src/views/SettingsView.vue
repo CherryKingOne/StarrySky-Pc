@@ -8,7 +8,7 @@ import ChangePasswordDialog from '@renderer/components/ChangePasswordDialog.vue'
 import ConfirmDialog from '@renderer/components/ConfirmDialog.vue'
 import GroupQrDialog from '@renderer/components/GroupQrDialog.vue'
 import OptionPickerDialog from '@renderer/components/OptionPickerDialog.vue'
-import ResetPasswordDialog from '@renderer/components/ResetPasswordDialog.vue'
+import ResetPasswordForm from '@renderer/components/ResetPasswordForm.vue'
 import SlideVerifyDialog from '@renderer/components/SlideVerifyDialog.vue'
 import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
@@ -24,7 +24,7 @@ const activeNav = ref('account')
 const toastMessage = ref('')
 
 const showChangePassword = ref(false)
-const showResetPassword = ref(false)
+const showResetPage = ref(false)
 const showQr = ref(false)
 const showCrop = ref(false)
 const showLogout = ref(false)
@@ -61,6 +61,10 @@ const nickname = computed(() => app.nickname)
 const avatarIndex = computed(() => app.avatarIndex)
 const accountId = computed(() => app.accountId)
 const phone = computed(() => app.phone)
+const resetChannel = computed<'phone' | 'email'>(() =>
+  phone.value.includes('@') ? 'email' : 'phone'
+)
+const resetChannelLabel = computed(() => (resetChannel.value === 'phone' ? '手机号' : '邮箱'))
 const language = computed(() => app.language)
 const quiet = computed(() => notifications.quiet)
 
@@ -91,12 +95,17 @@ function submitChangePassword(): void {
 
 function forgotPassword(): void {
   showChangePassword.value = false
-  showResetPassword.value = true
+  showResetPage.value = true
 }
 
 function submitResetPassword(): void {
-  showResetPassword.value = false
+  showResetPage.value = false
   showToast('密码已重置，请使用新密码登录')
+}
+
+function selectNav(key: string): void {
+  showResetPage.value = false
+  activeNav.value = key
 }
 
 function onVerified(): void {
@@ -104,9 +113,10 @@ function onVerified(): void {
 }
 
 const isDark = computed(() => app.theme === 'dark')
-const navTitle = computed(
-  () => settingsNavs.find((item) => item.key === activeNav.value)?.label ?? '设置'
-)
+const navTitle = computed(() => {
+  if (showResetPage.value) return '找回密码'
+  return settingsNavs.find((item) => item.key === activeNav.value)?.label ?? '设置'
+})
 
 const generalRows = computed(() => [
   { key: 'autoLogin' as const, label: '下次自动登录' },
@@ -177,7 +187,7 @@ function checkUpdate(): void {
               ? 'bg-selected-alt text-accent'
               : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
           "
-          @click="activeNav = item.key"
+          @click="selectNav(item.key)"
         >
           {{ item.label }}
         </button>
@@ -206,7 +216,18 @@ function checkUpdate(): void {
     <!-- 内容区 -->
     <section class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-[60px] shrink-0 items-center justify-between px-6">
-        <h3 class="text-section text-foreground">{{ navTitle }}</h3>
+        <div class="flex min-w-0 items-center gap-2">
+          <button
+            v-if="showResetPage"
+            v-tooltip="'返回账号与安全'"
+            type="button"
+            class="icon-button h-8 w-8 rounded-md"
+            @click="showResetPage = false"
+          >
+            <AppIcon name="ion:ios-arrow-back" :size="18" />
+          </button>
+          <h3 class="truncate text-section text-foreground">{{ navTitle }}</h3>
+        </div>
         <button
           v-tooltip="'关闭设置'"
           type="button"
@@ -219,8 +240,22 @@ function checkUpdate(): void {
       <div class="h-px w-full bg-border" />
 
       <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+        <!-- P23 找回密码（页面） -->
+        <template v-if="showResetPage">
+          <p class="mb-4 text-caption text-secondary-foreground">
+            通过{{ resetChannelLabel }}验证码重置登录密码，验证码 5 分钟内有效。
+          </p>
+          <div class="max-w-[440px]">
+            <ResetPasswordForm
+              :channel="resetChannel"
+              :initial-identifier="phone"
+              @done="submitResetPassword"
+            />
+          </div>
+        </template>
+
         <!-- 账号与安全 -->
-        <template v-if="activeNav === 'account'">
+        <template v-else-if="activeNav === 'account'">
           <div class="flex items-center gap-4 rounded-lg bg-panel p-4">
             <button
               v-tooltip="'修改头像'"
@@ -269,9 +304,9 @@ function checkUpdate(): void {
               <button
                 type="button"
                 class="text-small text-link hover:text-link-hover"
-                @click="showResetPassword = true"
+                @click="showResetPage = true"
               >
-                通过手机号重置
+                通过{{ resetChannelLabel }}重置
               </button>
             </div>
             <div class="flex h-14 items-center justify-between border-b border-divider">
@@ -450,13 +485,6 @@ function checkUpdate(): void {
       @close="showChangePassword = false"
       @submit="submitChangePassword"
       @forgot="forgotPassword"
-    />
-
-    <!-- P23 重置密码 -->
-    <ResetPasswordDialog
-      :visible="showResetPassword"
-      @close="showResetPassword = false"
-      @submit="submitResetPassword"
     />
 
     <!-- P15-04/05 我的二维码 -->

@@ -2,8 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
-import PopupDialog from '@renderer/components/PopupDialog.vue'
-import ResetPasswordDialog from '@renderer/components/ResetPasswordDialog.vue'
+import ResetPasswordForm from '@renderer/components/ResetPasswordForm.vue'
 import Toast from '@renderer/components/Toast.vue'
 import {
   loginWithEmail,
@@ -24,7 +23,7 @@ const isMac = isMacPlatform()
 const app = useAppStore()
 const router = useRouter()
 
-type AuthView = 'login' | 'register'
+type AuthView = 'login' | 'register' | 'reset' | 'terms' | 'privacy'
 
 const channel = ref<AuthChannel>('phone')
 /** true：选择登录方式；false：进入具体登录方式 */
@@ -41,58 +40,75 @@ const code = ref('')
 
 const error = ref('')
 const loading = ref(false)
-const sending = ref(false)
 const countdown = ref(0)
-const showReset = ref(false)
 const toastMessage = ref('')
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const agreed = ref(false)
-const showDoc = ref(false)
-const docType = ref<'terms' | 'privacy'>('terms')
+/** 从哪个页面进入条款页，返回时恢复对应页面 */
+const docReturnView = ref<'login' | 'register'>('login')
 let timer: ReturnType<typeof setInterval> | undefined
 
-const docTitle = computed(() => (docType.value === 'terms' ? '服务条款' : '隐私协议'))
 const docLines = computed(() =>
-  docType.value === 'terms'
+  view.value === 'terms'
     ? [
-        '1. 本客户端用于企业内部沟通与协作演示。',
+        '欢迎使用野火IM。使用本客户端前，请仔细阅读并理解以下条款。',
+        '1. 本客户端用于企业内部沟通与协作。',
         '2. 请勿上传或传播违法、侵权、涉密内容。',
         '3. 使用本服务即表示你同意遵守企业沟通规范与相关法律法规。',
+        '4. 我们可能根据产品迭代更新条款，更新后会在客户端内提示。',
         '（当前为演示文本，正式服务条款以官方发布为准。）'
       ]
     : [
+        '我们重视你的个人信息保护。请阅读以下说明。',
         '1. 客户端仅保存登录所需的账号、昵称、令牌等必要信息。',
         '2. 本地设备会保存会话状态用于保持登录，可在退出登录时清除。',
         '3. 我们不会将你的数据用于与服务无关的用途。',
+        '4. 未经授权，我们不会向第三方提供你的个人信息。',
         '（当前为演示文本，正式隐私政策以官方发布为准。）'
       ]
 )
 
 function openDoc(type: 'terms' | 'privacy'): void {
-  docType.value = type
-  showDoc.value = true
+  if (view.value === 'login' || view.value === 'register') {
+    docReturnView.value = view.value
+  }
+  view.value = type
+}
+
+function returnFromDoc(): void {
+  view.value = docReturnView.value
 }
 
 const channelLabel = computed(() => (channel.value === 'phone' ? '手机号' : '邮箱'))
 const identifierPlaceholder = computed(() =>
   channel.value === 'phone' ? '请输入 11 位手机号' : '请输入邮箱地址'
 )
-const methodTitle = computed(() =>
-  view.value === 'register' ? `注册${channelLabel.value}账号` : `${channelLabel.value}登录`
-)
+const methodTitle = computed(() => {
+  if (view.value === 'terms') return '服务条款'
+  if (view.value === 'privacy') return '隐私协议'
+  if (view.value === 'reset') return '找回密码'
+  return view.value === 'register' ? `注册${channelLabel.value}账号` : `${channelLabel.value}登录`
+})
 const methodSubtitle = computed(() => {
+  if (view.value === 'terms' || view.value === 'privacy') {
+    return '最后更新：2026 年 11 月，请阅读以下内容'
+  }
+  if (view.value === 'reset') return `通过${channelLabel.value}验证码重置登录密码`
   if (view.value === 'register') return '填写信息，注册后自动登录'
   return `使用${channelLabel.value} + ${useCode.value ? '验证码' : '密码'}登录`
+})
+const headerBackLabel = computed(() => {
+  if (view.value === 'terms' || view.value === 'privacy') {
+    return docReturnView.value === 'register' ? '返回注册' : '返回登录'
+  }
+  return view.value === 'reset' ? '返回登录' : '返回选择登录方式'
 })
 const submitLabel = computed(() => {
   if (view.value === 'register') return '注册并登录'
   return useCode.value ? '验证码登录' : '登录'
 })
-const codeText = computed(() => {
-  if (sending.value) return '发送中…'
-  return countdown.value > 0 ? `${countdown.value}s` : '获取验证码'
-})
+const codeText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : '获取验证码'))
 
 function showToast(message: string): void {
   toastMessage.value = ''
@@ -140,7 +156,7 @@ onBeforeUnmount(() => {
 })
 
 async function sendCode(): Promise<void> {
-  if (countdown.value > 0 || sending.value) return
+  if (countdown.value > 0) return
   const idError = validateIdentifier()
   if (idError) {
     error.value = idError
@@ -148,16 +164,16 @@ async function sendCode(): Promise<void> {
   }
 
   error.value = ''
-  sending.value = true
+  // 点击后立即进入 60s 倒计时，接口在后台发送，不阻塞按钮状态
+  startCountdown()
+
   const scene: CodeScene = view.value === 'register' ? 'REGISTER' : 'LOGIN'
   try {
     await sendCodeRequest(channel.value, identifier.value.trim(), scene)
-    startCountdown()
-    showToast('验证码已发送，请查收')
   } catch (err) {
     error.value = messageOf(err)
-  } finally {
-    sending.value = false
+    // 发送失败：恢复按钮，允许用户重试
+    resetCountdown()
   }
 }
 
@@ -282,6 +298,18 @@ function backToPicker(): void {
   resetCountdown()
 }
 
+function onHeaderBack(): void {
+  if (view.value === 'terms' || view.value === 'privacy') {
+    returnFromDoc()
+    return
+  }
+  if (view.value === 'reset') {
+    switchView('login')
+    return
+  }
+  backToPicker()
+}
+
 function switchView(next: AuthView): void {
   view.value = next
   error.value = ''
@@ -305,6 +333,8 @@ function switchLoginMethod(): void {
 }
 
 function onFormEnter(event: KeyboardEvent): void {
+  // 找回密码 / 条款页面不触发登录提交
+  if (view.value === 'reset' || view.value === 'terms' || view.value === 'privacy') return
   // 避免在按钮上按 Enter 时同时触发提交
   if ((event.target as HTMLElement).tagName === 'BUTTON') return
   event.preventDefault()
@@ -312,7 +342,7 @@ function onFormEnter(event: KeyboardEvent): void {
 }
 
 function onResetDone(): void {
-  showReset.value = false
+  switchView('login')
   showToast('密码已重置，请使用新密码登录')
 }
 
@@ -412,10 +442,10 @@ function closeWindow(): void {
         <!-- 返回 + 当前登录方式 -->
         <div class="flex shrink-0 items-center gap-2">
           <button
-            v-tooltip="'返回选择登录方式'"
+            v-tooltip="headerBackLabel"
             type="button"
             class="icon-button h-8 w-8 rounded-md"
-            @click="backToPicker"
+            @click="onHeaderBack"
           >
             <AppIcon name="ion:ios-arrow-back" :size="18" />
           </button>
@@ -425,8 +455,35 @@ function closeWindow(): void {
           </div>
         </div>
 
-        <!-- 表单 -->
-        <div class="scrollbar-none mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <!-- 找回密码（页面） -->
+        <div
+          v-if="view === 'reset'"
+          class="scrollbar-none mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
+          <ResetPasswordForm
+            :channel="channel"
+            :initial-identifier="identifier"
+            @done="onResetDone"
+          />
+        </div>
+
+        <!-- 服务条款 / 隐私协议（页面） -->
+        <div
+          v-else-if="view === 'terms' || view === 'privacy'"
+          class="scrollbar-none mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
+          <div class="space-y-2.5 text-small leading-relaxed text-secondary-foreground">
+            <p v-for="line in docLines" :key="line">{{ line }}</p>
+          </div>
+          <div class="mt-auto pt-4">
+            <button type="button" class="btn-primary h-10 w-full" @click="returnFromDoc">
+              我已知晓，返回
+            </button>
+          </div>
+        </div>
+
+        <!-- 登录 / 注册表单 -->
+        <div v-else class="scrollbar-none mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto">
           <input
             v-if="view === 'register'"
             v-model="nickname"
@@ -473,7 +530,7 @@ function closeWindow(): void {
             <button
               type="button"
               class="h-9 w-[104px] shrink-0 rounded-sm border border-border bg-input text-small text-link transition-colors hover:bg-item-hover disabled:opacity-50"
-              :disabled="countdown > 0 || sending"
+              :disabled="countdown > 0"
               @click="sendCode"
             >
               {{ codeText }}
@@ -585,7 +642,7 @@ function closeWindow(): void {
               <button
                 type="button"
                 class="text-link hover:text-link-hover"
-                @click="showReset = true"
+                @click="switchView('reset')"
               >
                 忘记密码
               </button>
@@ -602,26 +659,6 @@ function closeWindow(): void {
         </div>
       </template>
     </div>
-
-    <!-- 找回密码 -->
-    <ResetPasswordDialog
-      :visible="showReset"
-      :channel="channel"
-      @close="showReset = false"
-      @done="onResetDone"
-    />
-
-    <!-- 服务条款 / 隐私协议 -->
-    <PopupDialog :visible="showDoc" :title="docTitle" width="460px" @close="showDoc = false">
-      <div class="space-y-2 text-small leading-relaxed text-secondary-foreground">
-        <p v-for="line in docLines" :key="line">{{ line }}</p>
-      </div>
-      <template #footer>
-        <button type="button" class="btn-primary h-9 px-4" @click="showDoc = false">
-          我知道了
-        </button>
-      </template>
-    </PopupDialog>
 
     <Toast :message="toastMessage" @close="toastMessage = ''" />
   </div>

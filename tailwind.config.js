@@ -120,10 +120,10 @@ module.exports = {
         badge: '12px'
       },
       boxShadow: {
-        card: '0 4px 8px rgba(0, 0, 0, 0.2)',
-        popover: '0 4px 16px rgba(0, 0, 0, 0.12)',
-        modal: '0 12px 40px rgba(0, 0, 0, 0.24)',
-        menu: '0 4px 12px rgba(0, 0, 0, 0.1)',
+        card: '0 2px 6px rgba(0, 0, 0, 0.12)',
+        popover: '0 4px 12px rgba(0, 0, 0, 0.1)',
+        modal: '0 8px 24px rgba(0, 0, 0, 0.18)',
+        menu: '0 4px 10px rgba(0, 0, 0, 0.08)',
         window: '0 20px 50px rgba(0, 0, 0, 0.08), 0 10px 20px rgba(0, 0, 0, 0.04)',
         accent: '0 4px 12px rgba(31, 100, 228, 0.3)'
       },

@@ -46,7 +46,7 @@ function confirmScan(): void {
           <AppIcon name="ion:qr-scanner" :size="72" class="text-on-accent/40" />
         </div>
         <span
-          class="absolute inset-x-6 h-0.5 bg-accent shadow-accent transition-all duration-1000"
+          class="absolute inset-x-6 h-0.5 bg-accent transition-all duration-1000"
           :class="scanning ? 'top-8 animate-bounce' : 'top-1/2 opacity-0'"
         />
       </div>

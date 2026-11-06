@@ -20,7 +20,7 @@
   --bg-item-selected: #e3f2fd;
   --bg-conv-active: #d6e4fb;
   --bg-selected-alt: #dbe1f0;
-  --bg-info-panel: rgba(255, 255, 255, 0.898);
+  --bg-info-panel: #ffffff;
   --bg-message-in: #ffffff;
   --bg-message-out: #409cff;
   --bg-message-quoted: #e1e1e1;
@@ -79,26 +79,26 @@
 
 .dark {
   --canvas: #1a1a1c;
-  --bg-primary: #1c1c1e;
-  --bg-secondary: #2c2c2e;
-  --bg-tertiary: #252527;
-  --bg-sidebar: #2c2c2e;
-  --bg-input: #3a3a3c;
-  --bg-item-hover: rgba(255, 255, 255, 0.08);
+  --bg-primary: #1b1b1d;
+  --bg-secondary: #262628;
+  --bg-tertiary: #212124;
+  --bg-sidebar: #262628;
+  --bg-input: #303033;
+  --bg-item-hover: rgba(255, 255, 255, 0.07);
   --bg-item-normal: rgba(0, 0, 0, 0);
   --bg-item-top: rgba(255, 255, 255, 0.03);
   --bg-item-selected: #007aff;
-  --bg-conv-active: rgba(10, 132, 255, 0.28);
-  --bg-selected-alt: #2d3d5d;
-  --bg-info-panel: rgba(28, 28, 30, 0.9);
-  --bg-message-in: #2c2c2e;
+  --bg-conv-active: rgba(10, 132, 255, 0.24);
+  --bg-selected-alt: #2a3852;
+  --bg-info-panel: #222225;
+  --bg-message-in: #28282b;
   --bg-message-out: #409cff;
-  --bg-message-quoted: #3a3a3c;
-  --bg-message-selected: #121212;
-  --bg-modal: #2c2c2e;
-  --bg-placeholder: #3a3a3c;
-  --bg-tooltip: #323232;
-  --bg-action: #202020;
+  --bg-message-quoted: #343438;
+  --bg-message-selected: #1e1e21;
+  --bg-modal: #26262a;
+  --bg-placeholder: #303033;
+  --bg-tooltip: #2a2a2e;
+  --bg-action: #1e1e21;
   --bg-voip: #2e2e2e;
   --bg-preview: #0d0d0f;
   --bg-badge: #ff453a;
@@ -106,33 +106,33 @@
   --accent-active: #40a9ff;
   --accent-subtle: rgba(10, 132, 255, 0.15);
 
-  --text-primary: #e0e0e4;
-  --text-secondary: #9898a0;
-  --text-secondary-strong: #b0b0b8;
-  --text-tertiary: #808088;
-  --text-time: #808088;
-  --text-hint: #8e8e93;
-  --text-placeholder: #8e8e93;
+  --text-primary: #d9d9df;
+  --text-secondary: #91919a;
+  --text-secondary-strong: #a6a6ae;
+  --text-tertiary: #82828a;
+  --text-time: #7c7c84;
+  --text-hint: #86868e;
+  --text-placeholder: #7f7f87;
   --text-link: #0a84ff;
   --text-link-hover: #40a9ff;
   --text-on-accent: #ffffff;
   --text-danger: #ff453a;
   --text-warning: #ffd60a;
-  --text-muted: #86868b;
+  --text-muted: #83838b;
 
-  --border-primary: rgba(255, 255, 255, 0.1);
-  --border-secondary: rgba(255, 255, 255, 0.08);
-  --border-separator: rgba(255, 255, 255, 0.06);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-strong: #48484a;
-  --border-muted: #3a3a3c;
-  --border-tertiary: rgba(255, 255, 255, 0.05);
+  --border-primary: rgba(255, 255, 255, 0.08);
+  --border-secondary: rgba(255, 255, 255, 0.06);
+  --border-separator: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.03);
+  --border-strong: #404043;
+  --border-muted: #333336;
+  --border-tertiary: rgba(255, 255, 255, 0.04);
   --border-active: #0a84ff;
 
-  --icon-secondary: #8e8e93;
+  --icon-secondary: #8a8a92;
   --icon-hover-bg: #5a5a5b;
-  --overlay: rgba(0, 0, 0, 0.75);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --overlay: rgba(0, 0, 0, 0.62);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
 
   --status-success: #32d74b;
   --status-error: #ff453a;
@@ -303,6 +303,50 @@ html.login-window .app-window.login-shell {
 
 .app-no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* 深色模式：收紧阴影，避免弹窗边缘出现一圈“发光”的光晕 */
+.dark .shadow-modal {
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.42),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-popover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.dark .shadow-menu {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.dark .shadow-card {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* 深色模式下浅色大标题字号略缩小，减少大块亮色文字造成的光晕 */
+.dark .text-display {
+  font-size: 22px;
+  line-height: 30px;
+}
+
+.dark .text-page {
+  font-size: 18px;
+  line-height: 26px;
+}
+
+.dark .text-section {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.dark .text-label {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.dark body {
+  letter-spacing: 0.01em;
 }
 
 /* macOS 关闭圆点：左上角仅一个红色按钮，悬停显示 × */
