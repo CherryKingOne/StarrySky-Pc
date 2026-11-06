@@ -1,9 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import BadgeDigit from '@renderer/components/BadgeDigit.vue'
+import { useAppStore } from '@renderer/stores/app'
 import type { Conversation } from '@renderer/types'
 
-defineProps<{ conversation: Conversation; active?: boolean }>()
+const props = defineProps<{ conversation: Conversation; active?: boolean }>()
+const app = useAppStore()
+const isSelf = computed(
+  () =>
+    !props.conversation.group &&
+    !props.conversation.bot &&
+    props.conversation.targetUserId === app.user?.userId
+)
 
 const emit = defineEmits<{
   contextmenu: [event: MouseEvent, conversation: Conversation]
@@ -42,6 +51,12 @@ function onContextMenu(event: MouseEvent, conversation: Conversation): void {
             class="shrink-0 rounded-sm bg-conv-active px-1 text-[10px] leading-4 text-accent"
           >
             BOT
+          </span>
+          <span
+            v-else-if="isSelf"
+            class="shrink-0 rounded-sm bg-conv-active px-1 text-[10px] leading-4 text-accent"
+          >
+            我的会话
           </span>
         </span>
         <span class="shrink-0 text-micro text-time-foreground">{{ conversation.time }}</span>

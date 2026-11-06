@@ -63,7 +63,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
       @click.self="onBackdrop"
     >
       <div
-        class="flex max-h-full w-full flex-col overflow-hidden rounded-lg border border-border-soft bg-modal shadow-modal"
+        class="flex max-h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-modal shadow-modal"
         :style="{ maxWidth: width, maxHeight: height || 'calc(100% - 48px)' }"
         role="dialog"
         aria-modal="true"

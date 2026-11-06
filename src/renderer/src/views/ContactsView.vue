@@ -186,6 +186,16 @@ function startCall(mode: CallMode): void {
   showCall.value = true
 }
 
+async function onSelfChat(): Promise<void> {
+  try {
+    await store.openWithSelf()
+    void router.push('/chats')
+    showToast('已打开与自己的会话')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
+}
+
 async function onAddStart(payload: { userId: string; name: string; index: number }): Promise<void> {
   if (!payload.userId) {
     showToast('缺少用户 ID')
@@ -642,6 +652,7 @@ function onCardQr(): void {
       @start="onAddStart"
       @create="onAddCreate"
       @friend="showToast(`已向 ${$event} 发送好友申请`)"
+      @self-chat="onSelfChat"
       @toast="showToast"
     />
 

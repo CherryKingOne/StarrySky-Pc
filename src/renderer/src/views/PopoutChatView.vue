@@ -240,7 +240,13 @@ function locateContext(conversationId: string): void {
       <div class="min-w-0 flex-1">
         <h2 class="truncate text-section text-foreground">{{ conversation.name }}</h2>
         <p class="truncate text-caption text-secondary-foreground">
-          {{ conversation.group ? `${conversation.members?.length ?? 0} 位成员` : '独立聊天窗' }}
+          {{
+            conversation.group
+              ? `${conversation.members?.length ?? 0} 位成员`
+              : !conversation.bot && conversation.targetUserId === app.user?.userId
+                ? '与自己的会话 · 备忘 / 文件传输'
+                : '独立聊天窗'
+          }}
         </p>
       </div>
       <button

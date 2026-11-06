@@ -300,6 +300,13 @@ export const useConversationsStore = defineStore('conversations', {
       return item.conversationId
     },
 
+    /** 打开与自己的会话（文件传输/备忘） */
+    async openWithSelf(): Promise<string> {
+      const me = useAppStore().user?.userId
+      if (!me) throw new ApiError(10100, '未登录')
+      return this.openWithUser(me)
+    },
+
     /** 打开与机器人的单聊 */
     async openWithBot(botId: string): Promise<string> {
       const token = useAppStore().accessToken

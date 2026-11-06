@@ -20,10 +20,12 @@ import { logoutSession } from '@renderer/api/auth'
 import { getCurrentUser, updateCurrentUser } from '@renderer/api/users'
 import { uploadFile } from '@renderer/api/files'
 import { useAppStore } from '@renderer/stores/app'
+import { useConversationsStore } from '@renderer/stores/conversations'
 import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
 const router = useRouter()
 const app = useAppStore()
+const conversations = useConversationsStore()
 
 const activeNav = ref('account')
 const toastMessage = ref('')
@@ -67,7 +69,7 @@ const devices = computed(() => [
 
 const nickname = computed(() => app.nickname)
 const avatarIndex = computed(() => app.avatarIndex)
-const accountId = computed(() => app.accountId)
+const userId = computed(() => app.user?.userId ?? '')
 const phone = computed(() => app.phone)
 const userSignature = computed(() => app.user?.signature ?? '')
 const userGender = computed(() => app.user?.gender ?? 0)
@@ -101,6 +103,28 @@ function applyAvatar(index: number): void {
 
 function pickAvatar(): void {
   avatarInput.value?.click()
+}
+
+async function openSelfChat(): Promise<void> {
+  try {
+    await conversations.openWithSelf()
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
+}
+
+async function copyAccountId(): Promise<void> {
+  if (!userId.value) {
+    showToast('当前账号暂无 ID')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(userId.value)
+    showToast('用户 ID 已复制到剪贴板')
+  } catch {
+    showToast('复制失败，请手动选择 ID 文本')
+  }
 }
 
 async function onAvatarFile(event: Event): Promise<void> {
@@ -336,9 +360,25 @@ onMounted(async () => {
             </button>
             <div class="min-w-0 flex-1">
               <p class="text-label text-foreground">{{ nickname }}</p>
-              <p class="mt-0.5 text-micro text-secondary-foreground">ID: {{ accountId }}</p>
+              <button
+                v-tooltip="'点击复制 ID'"
+                type="button"
+                class="mt-0.5 inline-flex items-center gap-1 text-micro text-secondary-foreground transition-colors hover:text-accent"
+                @click="copyAccountId"
+              >
+                ID: {{ userId }}
+                <AppIcon name="ion:copy-outline" :size="11" />
+              </button>
             </div>
             <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                @click="openSelfChat"
+              >
+                <AppIcon name="ion:chatboxes" :size="14" />
+                发消息给自己
+              </button>
               <button
                 type="button"
                 class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"

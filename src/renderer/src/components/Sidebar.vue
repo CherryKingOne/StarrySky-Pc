@@ -28,7 +28,7 @@ const toastMessage = ref('')
 
 const nickname = computed(() => app.nickname)
 const avatarIndex = computed(() => app.avatarIndex)
-const accountId = computed(() => app.accountId)
+const userId = computed(() => app.user?.userId ?? '')
 const totalUnread = computed(() => store.totalUnread)
 
 function openSettings(): void {
@@ -38,6 +38,16 @@ function openSettings(): void {
 function openSelfQr(): void {
   showUserCard.value = false
   showQr.value = true
+}
+
+async function openSelfChat(): Promise<void> {
+  showUserCard.value = false
+  try {
+    await store.openWithSelf()
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
 }
 
 function showToast(message: string): void {
@@ -175,9 +185,10 @@ async function logout(): Promise<void> {
       desc="产品经理"
       :avatar-index="avatarIndex"
       :avatar-url="app.user?.avatarUrl"
-      :account-id="accountId"
+      :account-id="userId"
       self
       @close="showUserCard = false"
+      @start-chat="openSelfChat"
       @qr="openSelfQr"
       @settings="onCardSettings"
     />

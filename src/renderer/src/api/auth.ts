@@ -24,26 +24,9 @@ export interface AuthSession extends TokenPair {
   user: AuthUser
 }
 
-const DEVICE_KEY = 'starrysky-device-id'
-
-function getDeviceId(): string {
-  try {
-    const existed = localStorage.getItem(DEVICE_KEY)
-    if (existed) return existed
-    const random =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2)
-    const id = `pc-${random}`.slice(0, 64)
-    localStorage.setItem(DEVICE_KEY, id)
-    return id
-  } catch {
-    return 'pc-unknown'
-  }
-}
-
-function devicePayload(): { deviceType: 'PC'; deviceId: string } {
-  return { deviceType: 'PC', deviceId: getDeviceId() }
+/** 新版接口只要求 deviceType，不再传 deviceId */
+function devicePayload(): { deviceType: 'PC' } {
+  return { deviceType: 'PC' }
 }
 
 /** 手机号 + 密码 或 手机号 + 验证码，二选一 */

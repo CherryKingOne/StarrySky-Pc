@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import IconButton from '@renderer/components/IconButton.vue'
+import { useAppStore } from '@renderer/stores/app'
 import type { CallMode, Conversation } from '@renderer/types'
 
 const props = defineProps<{
@@ -32,8 +33,17 @@ const memberCount = computed(() => {
   return 2
 })
 
+const app = useAppStore()
+const isSelf = computed(
+  () =>
+    !props.conversation.group &&
+    !props.conversation.bot &&
+    props.conversation.targetUserId === app.user?.userId
+)
+
 const subtitle = computed(() => {
   if (props.conversation.bot) return `机器人 · ${props.conversation.bot.description || '暂无简介'}`
+  if (isSelf.value) return '与自己的会话 · 备忘 / 文件传输'
   if (props.conversation.group) return `${memberCount.value} 位成员`
   return props.conversation.targetSignature || '在线'
 })
@@ -116,6 +126,16 @@ const subtitle = computed(() => {
         </p>
         <p class="mt-3 text-micro text-tertiary-foreground">
           机器人由开发者后台创建和管理，客户端不能删除机器人。
+        </p>
+      </div>
+    </div>
+
+    <!-- 自己：备忘/文件传输说明 -->
+    <div v-else-if="isSelf" class="mt-4 px-5">
+      <div class="rounded-md bg-item-hover p-3">
+        <p class="text-caption text-secondary-foreground">这是你与自己的会话</p>
+        <p class="mt-1 text-small leading-relaxed text-foreground">
+          可以发送文字、图片和文件给自己，用于备忘或跨设备传输。
         </p>
       </div>
     </div>
@@ -219,7 +239,7 @@ const subtitle = computed(() => {
         <AppIcon name="ion:ios-arrow-right" :size="14" class="ml-auto text-tertiary-foreground" />
       </button>
       <button
-        v-else-if="!conversation.bot"
+        v-else-if="!conversation.bot && !isSelf"
         type="button"
         class="flex h-10 items-center gap-3 rounded-sm px-3 text-left text-small text-foreground transition-colors hover:bg-item-hover"
         @click="emit('open-qr-self')"

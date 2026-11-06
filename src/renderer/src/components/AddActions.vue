@@ -9,6 +9,7 @@ const emit = defineEmits<{
   start: [payload: { userId: string; name: string; index: number }]
   create: [payload: { name: string; members: { userId: string; name: string; index: number }[] }]
   friend: [name: string]
+  selfChat: []
   toast: [message: string]
 }>()
 
@@ -46,6 +47,7 @@ defineExpose({ open })
     :visible="showFriend"
     @close="showFriend = false"
     @sent="emit('friend', $event)"
+    @self-chat="emit('selfChat')"
     @toast="emit('toast', $event)"
   />
   <CreateGroupDialog

@@ -95,7 +95,7 @@ async function send(): Promise<void> {
     <div
       v-if="visible && conversation"
       ref="panel"
-      class="popup-layer absolute z-[75] flex h-[520px] w-[360px] flex-col overflow-hidden rounded-lg border border-border-soft bg-modal shadow-modal"
+      class="popup-layer absolute z-[75] flex h-[520px] w-[360px] flex-col overflow-hidden rounded-lg border border-border bg-modal shadow-modal"
       :style="{ left: `${position.left}px`, top: `${position.top}px` }"
     >
       <header

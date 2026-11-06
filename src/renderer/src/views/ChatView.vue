@@ -98,6 +98,9 @@ const headerSubtitle = computed(() => {
   if (conversation.targetType === 'BOT') {
     return conversation.bot?.description || '机器人'
   }
+  if (!conversation.group && conversation.targetUserId === app.user?.userId) {
+    return '与自己的会话 · 备忘 / 文件传输'
+  }
   if (conversation.group) return `${conversation.members?.length ?? 0} 位成员`
   if (conversation.muted) return '消息免打扰'
   return conversation.targetSignature || '在线'
@@ -671,6 +674,16 @@ function onForwardDetail(message: ChatMessage): void {
   showForwardDetail.value = true
 }
 
+async function onSelfChat(): Promise<void> {
+  try {
+    await store.openWithSelf()
+    void router.push('/chats')
+    showToast('已打开与自己的会话')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
+}
+
 /* 加号菜单（P15-13） */
 async function onStartChat(payload: {
   userId: string
@@ -881,6 +894,7 @@ async function leaveGroup(): Promise<void> {
       @start="onStartChat"
       @create="onCreateGroup"
       @friend="showToast(`已向 ${$event} 发送好友申请`)"
+      @self-chat="onSelfChat"
       @toast="showToast"
     />
 
@@ -986,7 +1000,7 @@ async function leaveGroup(): Promise<void> {
       :desc="profile.desc"
       :avatar-index="profile.index"
       :avatar-url="active?.avatarUrl"
-      :account-id="active?.targetUsername ?? active?.targetUserId ?? ''"
+      :account-id="active?.targetUserId ?? active?.targetUsername ?? ''"
       @close="showProfile = false"
       @start-chat="openProfileChat"
       @add-friend="profileAddFriend"
