@@ -7,6 +7,9 @@ import ResetPasswordDialog from '@renderer/components/ResetPasswordDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { useAppStore } from '@renderer/stores/app'
 import type { LoginMode } from '@renderer/stores/app'
+import { hasElectron, sendWindowAction } from '@renderer/utils/window'
+
+const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 
 const app = useAppStore()
 const router = useRouter()
@@ -105,6 +108,10 @@ function submit(): void {
     return
   }
   app.login()
+  if (props.compact && hasElectron()) {
+    sendWindowAction('auth:login')
+    return
+  }
   void router.replace('/chats')
 }
 
@@ -116,6 +123,10 @@ function simulateScan(): void {
 
 function confirmScanLogin(): void {
   app.login()
+  if (props.compact && hasElectron()) {
+    sendWindowAction('auth:login')
+    return
+  }
   void router.replace('/chats')
 }
 
@@ -134,10 +145,51 @@ function downloadApp(): void {
   window.open('https://www.wildfirechat.cn', '_blank')
   showToast('已在浏览器中打开下载页')
 }
+
+function minimizeWindow(): void {
+  sendWindowAction('window:minimize')
+}
+
+function closeWindow(): void {
+  if (hasElectron()) {
+    sendWindowAction('window:close')
+    return
+  }
+  window.close()
+}
 </script>
 
 <template>
-  <div class="app-card flex h-[500px] w-[380px] flex-col overflow-hidden">
+  <div
+    class="app-card relative flex h-[500px] w-[380px] flex-col overflow-hidden"
+    :class="props.compact ? 'shadow-popover' : ''"
+  >
+    <!-- 卡片模式：顶部拖拽区 + 窗口控制 -->
+    <div
+      v-if="props.compact"
+      class="app-drag absolute inset-x-0 top-0 z-20 flex h-8 items-center justify-between px-3"
+    >
+      <span class="text-micro font-medium text-tertiary-foreground">野火IM</span>
+      <div class="flex items-center gap-1">
+        <button
+          v-tooltip="'最小化'"
+          type="button"
+          class="app-no-drag icon-button h-6 w-6 rounded-full text-tertiary-foreground"
+          @click="minimizeWindow"
+        >
+          <AppIcon name="ion:remove" :size="12" />
+        </button>
+        <button
+          v-tooltip="'关闭'"
+          type="button"
+          class="app-no-drag icon-button h-6 w-6 rounded-full text-tertiary-foreground"
+          @click="closeWindow"
+        >
+          <AppIcon name="ion:close" :size="12" />
+        </button>
+      </div>
+    </div>
+
     <!-- 扫码登录 -->
     <template v-if="isQr">
       <div class="mt-10 flex justify-center">

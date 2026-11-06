@@ -14,6 +14,7 @@ import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { settingsNavs } from '@renderer/data/mock'
 import { useAppStore } from '@renderer/stores/app'
+import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
 const router = useRouter()
 const app = useAppStore()
@@ -140,6 +141,10 @@ function lockApp(): void {
 function logout(): void {
   showLogout.value = false
   app.logout()
+  if (hasElectron()) {
+    sendWindowAction('auth:logout')
+    return
+  }
   void router.push('/login')
   showToast('已退出登录')
 }

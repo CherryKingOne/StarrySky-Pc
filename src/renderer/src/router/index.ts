@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAppStore } from '@renderer/stores/app'
+import { isLoginWindow } from '@renderer/utils/window'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -91,6 +92,11 @@ const TITLES: Record<string, string> = {
 }
 
 router.beforeEach((to) => {
+  // 登录小窗只渲染登录卡片，不参与主应用路由
+  if (isLoginWindow()) {
+    return to.name === 'login' ? true : { name: 'login' }
+  }
+
   const app = useAppStore()
 
   if (app.locked) {

@@ -287,3 +287,20 @@
     display: none;
   }
 }
+
+/* 登录小窗：整个窗口透明，只保留卡片自身的圆角与阴影 */
+html.login-window,
+html.login-window body,
+html.login-window #app,
+html.login-window .app-window.login-shell {
+  background: transparent;
+}
+
+/* 无边框窗口拖拽区域 */
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}

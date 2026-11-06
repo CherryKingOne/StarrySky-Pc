@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import { useAppStore } from '@renderer/stores/app'
+import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
 const app = useAppStore()
 const router = useRouter()
@@ -30,6 +31,10 @@ function unlock(): void {
 
 function switchAccount(): void {
   app.logout()
+  if (hasElectron()) {
+    sendWindowAction('auth:logout')
+    return
+  }
   void router.replace('/login')
 }
 </script>
