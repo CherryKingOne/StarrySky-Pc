@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
-import type { AuthSession, AuthUser } from '@renderer/api/auth'
+import type { AuthSession, AuthUser, TokenPair } from '@renderer/api/auth'
+import { refreshSession } from '@renderer/api/auth'
+import { setTokenRefresher } from '@renderer/api/http'
 
 export type Theme = 'light' | 'dark'
 
@@ -51,6 +53,8 @@ function readSession(): AuthSession | null {
 const initialSession = readSession()
 if (!initialSession) removeStored(LEGACY_AUTH_KEY)
 
+let refreshTask: Promise<string | null> | null = null
+
 export const useAppStore = defineStore('app', {
   state: () => ({
     authenticated: Boolean(initialSession?.accessToken),
@@ -83,7 +87,53 @@ export const useAppStore = defineStore('app', {
       writeStored(SESSION_KEY, JSON.stringify(session))
       removeStored(LEGACY_AUTH_KEY)
     },
+    /** 刷新令牌后只替换 token 字段，并持久化 */
+    applyTokens(tokens: TokenPair): void {
+      this.accessToken = tokens.accessToken
+      this.refreshToken = tokens.refreshToken
+      this.authenticated = true
+      const session: AuthSession = {
+        ...tokens,
+        user: this.user as AuthUser
+      }
+      if (this.user) writeStored(SESSION_KEY, JSON.stringify(session))
+    },
+
+    /** 资料更新后同步昵称并持久化 */
+    updateUser(user: AuthUser): void {
+      this.user = user
+      this.nickname = user.nickname || user.username
+      this.accountId = user.username
+      writeStored(
+        SESSION_KEY,
+        JSON.stringify({
+          accessToken: this.accessToken,
+          refreshToken: this.refreshToken,
+          tokenType: 'Bearer',
+          expiresIn: 7200,
+          user
+        })
+      )
+    },
+
+    async refreshAccessToken(): Promise<string | null> {
+      if (refreshTask) return refreshTask
+      if (!this.refreshToken) return null
+      refreshTask = refreshSession(this.refreshToken)
+        .then((tokens) => {
+          this.applyTokens(tokens)
+          return tokens.accessToken
+        })
+        .catch(() => null)
+        .finally(() => {
+          refreshTask = null
+        })
+      return refreshTask
+    },
+
     logout(): void {
+      refreshTask = null
+      setTokenRefresher(null)
       this.authenticated = false
       this.accessToken = ''
       this.refreshToken = ''

@@ -114,7 +114,12 @@ async function logout(): Promise<void> {
         class="rounded-md transition-transform hover:scale-105"
         @click="showUserCard = true"
       >
-        <Avatar :name="nickname.charAt(0)" :index="avatarIndex" :size="36" />
+        <Avatar
+          :name="nickname.charAt(0)"
+          :index="avatarIndex"
+          :avatar-url="app.user?.avatarUrl"
+          :size="36"
+        />
       </button>
     </div>
 
@@ -169,6 +174,7 @@ async function logout(): Promise<void> {
       :name="nickname"
       desc="产品经理"
       :avatar-index="avatarIndex"
+      :avatar-url="app.user?.avatarUrl"
       :account-id="accountId"
       self
       @close="showUserCard = false"

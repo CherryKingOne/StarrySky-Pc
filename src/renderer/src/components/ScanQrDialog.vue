@@ -8,7 +8,7 @@ const props = defineProps<{ visible: boolean }>()
 
 const emit = defineEmits<{
   close: []
-  start: [payload: { name: string; index: number }]
+  start: [payload: { userId: string; name: string; index: number }]
 }>()
 
 const scanning = ref(true)
@@ -25,7 +25,8 @@ function simulate(): void {
 }
 
 function confirmScan(): void {
-  emit('start', { name: '林晓', index: 1 })
+  // 扫码识人依赖二维码协议，后端暂未提供解析接口
+  emit('start', { userId: '', name: '林晓', index: 1 })
   emit('close')
 }
 </script>

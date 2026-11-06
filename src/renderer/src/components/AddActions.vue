@@ -4,11 +4,10 @@ import AddFriendDialog from '@renderer/components/AddFriendDialog.vue'
 import CreateGroupDialog from '@renderer/components/CreateGroupDialog.vue'
 import ScanQrDialog from '@renderer/components/ScanQrDialog.vue'
 import StartChatDialog from '@renderer/components/StartChatDialog.vue'
-import type { MemberInfo } from '@renderer/types'
 
 const emit = defineEmits<{
-  start: [payload: { name: string; index: number }]
-  create: [payload: { name: string; members: MemberInfo[] }]
+  start: [payload: { userId: string; name: string; index: number }]
+  create: [payload: { name: string; members: { userId: string; name: string; index: number }[] }]
   friend: [name: string]
   toast: [message: string]
 }>()
@@ -47,6 +46,7 @@ defineExpose({ open })
     :visible="showFriend"
     @close="showFriend = false"
     @sent="emit('friend', $event)"
+    @toast="emit('toast', $event)"
   />
   <CreateGroupDialog
     :visible="showGroup"

@@ -9,10 +9,11 @@ withDefaults(
     name: string
     desc?: string
     avatarIndex?: number
+    avatarUrl?: string | null
     accountId?: string
     self?: boolean
   }>(),
-  { desc: '', avatarIndex: 1, accountId: 'linxiao', self: false }
+  { desc: '', avatarIndex: 1, avatarUrl: null, accountId: 'linxiao', self: false }
 )
 
 const emit = defineEmits<{
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   startChat: []
   addFriend: []
   qr: []
+  block: []
   settings: []
 }>()
 </script>
@@ -33,7 +35,7 @@ const emit = defineEmits<{
     @close="emit('close')"
   >
     <div class="flex flex-col items-center px-6 pt-7 pb-2">
-      <Avatar :name="name" :index="avatarIndex" :size="64" />
+      <Avatar :name="name" :index="avatarIndex" :avatar-url="avatarUrl" :size="64" />
       <p class="mt-3 text-section text-foreground">{{ name }}</p>
       <p class="mt-1 text-caption text-secondary-foreground">{{ desc }}</p>
       <p class="mt-0.5 text-micro text-tertiary-foreground">ID: {{ accountId }}</p>
@@ -62,17 +64,24 @@ const emit = defineEmits<{
         <template v-else>
           <button
             type="button"
-            class="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-sm border border-border bg-input text-label text-foreground transition-colors hover:bg-item-hover"
+            class="inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-border bg-input text-small text-foreground transition-colors hover:bg-item-hover"
             @click="emit('addFriend')"
           >
             加好友
           </button>
           <button
             type="button"
-            class="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-sm border border-border bg-input text-label text-foreground transition-colors hover:bg-item-hover"
+            class="inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-border bg-input text-small text-foreground transition-colors hover:bg-item-hover"
             @click="emit('qr')"
           >
             二维码
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-border bg-input text-small text-danger transition-colors hover:bg-item-hover"
+            @click="emit('block')"
+          >
+            拉黑
           </button>
         </template>
       </div>

@@ -13,11 +13,14 @@ export interface AuthUser {
   createdAt: string
 }
 
-export interface AuthSession {
+export interface TokenPair {
   accessToken: string
   refreshToken: string
   tokenType: string
   expiresIn: number
+}
+
+export interface AuthSession extends TokenPair {
   user: AuthUser
 }
 
@@ -128,6 +131,14 @@ export function resetPasswordWithEmail(payload: {
   return apiRequest<null>('/auth/password/reset/email', {
     method: 'POST',
     body: payload
+  })
+}
+
+/** 用 refreshToken 换新令牌；轮换机制下旧 refreshToken 会立即失效 */
+export function refreshSession(refreshToken: string): Promise<TokenPair> {
+  return apiRequest<TokenPair>('/auth/refresh', {
+    method: 'POST',
+    body: { refreshToken }
   })
 }
 

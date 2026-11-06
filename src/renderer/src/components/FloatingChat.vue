@@ -77,18 +77,16 @@ async function scrollToBottom(): Promise<void> {
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
 }
 
-function send(): void {
+async function send(): Promise<void> {
   const value = text.value.trim()
   if (!value || !props.conversationId) return
-  store.pushMessage(props.conversationId, {
-    id: `float-${Date.now()}`,
-    direction: 'out',
-    kind: 'text',
-    time: new Date().toTimeString().slice(0, 5),
-    text: value
-  })
   text.value = ''
-  void scrollToBottom()
+  try {
+    await store.sendTextTo(props.conversationId, value)
+    await scrollToBottom()
+  } catch {
+    text.value = value
+  }
 }
 </script>
 
@@ -107,7 +105,12 @@ function send(): void {
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       >
-        <Avatar :name="conversation.name" :index="conversation.avatarIndex" :size="32" />
+        <Avatar
+          :name="conversation.name"
+          :index="conversation.avatarIndex"
+          :avatar-url="conversation.avatarUrl"
+          :size="32"
+        />
         <div class="min-w-0 flex-1">
           <p class="truncate text-small text-foreground">{{ conversation.name }}</p>
           <p class="truncate text-micro text-tertiary-foreground">会话浮窗 · 可拖动</p>

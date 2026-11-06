@@ -275,6 +275,8 @@ function onAction(key: string): void {
           </div>
           <MessageBubble
             :message="message"
+            :self-avatar="{ name: '我', index: 1, avatarUrl: null }"
+            :sender-avatar="{ name: 'AI 助手', index: 1, avatarUrl: null }"
             @preview="showToast('查看图片')"
             @open-file="showToast(`查看文件：${$event.fileName}`)"
             @open-forward="openForward"

@@ -12,12 +12,15 @@ import MessageInput from '@renderer/components/MessageInput.vue'
 import MessageContextDialog from '@renderer/components/MessageContextDialog.vue'
 import StatsDialog from '@renderer/components/StatsDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
+import { useAppStore } from '@renderer/stores/app'
 import { useConversationsStore } from '@renderer/stores/conversations'
+import { avatarIndexOf } from '@renderer/utils/chat'
 import type { CallMode, ChatMessage } from '@renderer/types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useConversationsStore()
+const app = useAppStore()
 
 const id = String(route.params.id ?? '')
 const toastMessage = ref('')
@@ -33,6 +36,43 @@ const showContext = ref(false)
 const showClear = ref(false)
 
 const conversation = computed(() => store.list.find((item) => item.id === id) ?? null)
+const selfAvatar = computed(() => ({
+  name: app.nickname || '我',
+  index: app.avatarIndex,
+  avatarUrl: app.user?.avatarUrl ?? null
+}))
+
+function senderAvatarOf(message: ChatMessage): {
+  name: string
+  index: number
+  avatarUrl: string | null
+} {
+  const current = conversation.value
+  if (!current) return { name: message.sender || '对方', index: 1, avatarUrl: null }
+  if (current.bot && message.senderId === current.bot.botId) {
+    return {
+      name: current.bot.nickname,
+      index: current.avatarIndex,
+      avatarUrl: current.bot.avatarUrl
+    }
+  }
+  if (message.senderId) {
+    const profile = store.profiles[message.senderId]
+    if (profile) {
+      return {
+        name: profile.nickname,
+        index: avatarIndexOf(profile.nickname),
+        avatarUrl: profile.avatarUrl
+      }
+    }
+  }
+  return {
+    name: message.sender || current.name,
+    index: current.avatarIndex,
+    avatarUrl: current.avatarUrl ?? null
+  }
+}
+
 const images = computed(
   () => conversation.value?.messages.filter((message) => message.kind === 'image') ?? []
 )
@@ -58,14 +98,20 @@ async function scrollToBottom(): Promise<void> {
   if (scrollArea.value) scrollArea.value.scrollTop = scrollArea.value.scrollHeight
 }
 
-function onSend(text: string): void {
-  store.sendMessage(text, replyTo.value?.text)
+async function onSend(text: string): Promise<void> {
+  const quoted = replyTo.value
   replyTo.value = null
-  void scrollToBottom()
-  window.setTimeout(() => {
-    store.simulateReply(id)
-    void scrollToBottom()
-  }, 900)
+  const payload = quoted ? `回复 ${quoted.sender}：${quoted.text}\n${text}` : text
+  try {
+    await store.sendMessage(payload)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '消息发送失败')
+  }
+}
+
+function onTyping(): void {
+  store.sendTyping(id)
 }
 
 function openPreview(message: ChatMessage): void {
@@ -104,29 +150,51 @@ function onAction(key: string): void {
   }
 }
 
-function sendFileMsg(payload: { name: string; size: string }): void {
-  store.sendFile(id, payload.name, payload.size)
-  void scrollToBottom()
+async function sendFileMsg(payload: { name: string; size: string; file: File }): Promise<void> {
+  try {
+    await store.sendFileAttachment(id, payload.file)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '文件上传失败')
+  }
 }
 
-function sendImageMsg(payload: { name: string }): void {
-  store.sendImage(id, payload.name, 2)
-  void scrollToBottom()
+async function sendImageMsg(payload: { name: string; file: File }): Promise<void> {
+  try {
+    await store.sendImageFile(id, payload.file)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '图片上传失败')
+  }
 }
 
-function sendAudioMsg(payload: { duration: string }): void {
-  store.sendAudio(id, payload.duration)
-  void scrollToBottom()
+async function sendAudioMsg(payload: { duration: string; blob?: Blob }): Promise<void> {
+  if (!payload.blob) {
+    showToast('未录制到音频')
+    return
+  }
+  const [minutes, seconds] = payload.duration.split(':').map((value) => Number(value))
+  try {
+    await store.sendAudioBlob(id, payload.blob, minutes * 60 + seconds)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '语音发送失败')
+  }
 }
 
 function sendPollMsg(): void {
   store.sendPoll(id, '本周评审时间投票')
+  showToast('投票能力后端暂未开放，当前为本地演示')
   void scrollToBottom()
 }
 
-function sendCardMsg(): void {
-  store.sendCard(id, '林晓', '产品经理')
-  void scrollToBottom()
+async function sendCardMsg(): Promise<void> {
+  try {
+    await store.sendCard(id, '林晓', '产品经理')
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '名片发送失败')
+  }
 }
 
 function startCall(mode: CallMode): void {
@@ -199,6 +267,8 @@ function locateContext(conversationId: string): void {
         :key="message.id"
         :message="message"
         :highlight="message.id === store.highlightId"
+        :self-avatar="selfAvatar"
+        :sender-avatar="senderAvatarOf(message)"
         @preview="openPreview"
         @open-file="showToast(`打开文件：${$event.fileName}`)"
         @open-forward="showForward = true"
@@ -213,6 +283,7 @@ function locateContext(conversationId: string): void {
       :title="conversation.name"
       :reply-to="replyTo"
       @send="onSend"
+      @typing="onTyping"
       @toast="showToast"
       @clear-reply="replyTo = null"
       @send-file="sendFileMsg"

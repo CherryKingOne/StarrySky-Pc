@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { onBeforeUnmount, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAppStore } from '@renderer/stores/app'
+import { useConversationsStore } from '@renderer/stores/conversations'
+import { wsClient } from '@renderer/api/ws'
+import { setTokenRefresher } from '@renderer/api/http'
 import { isLoginWindow } from '@renderer/utils/window'
 
 const app = useAppStore()
+const conversations = useConversationsStore()
 const compact = isLoginWindow()
 
 // 登录小窗需要透明背景，才能露出圆角与阴影
@@ -17,6 +21,40 @@ watch(
   },
   { immediate: true }
 )
+
+let unbindRealtime: (() => void) | undefined
+let unbindStatus: (() => void) | undefined
+
+watch(
+  () => app.accessToken,
+  (token) => {
+    unbindRealtime?.()
+    unbindRealtime = undefined
+    unbindStatus?.()
+    unbindStatus = undefined
+
+    setTokenRefresher(token ? () => app.refreshAccessToken() : null)
+
+    if (!token) {
+      wsClient.disconnect()
+      conversations.reset()
+      return
+    }
+
+    unbindRealtime = conversations.bindRealtime()
+    unbindStatus = wsClient.onStatus((status) => {
+      if (status === 'connected') void conversations.refresh().catch(() => undefined)
+    })
+    void conversations.load(true).catch(() => undefined)
+    wsClient.connect(token)
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  unbindRealtime?.()
+  unbindStatus?.()
+})
 </script>
 
 <template>

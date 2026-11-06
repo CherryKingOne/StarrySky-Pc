@@ -371,6 +371,8 @@ export const settingsNavs: SettingsNav[] = [
   { key: 'account', label: '账号与安全' },
   { key: 'notifications', label: '消息通知' },
   { key: 'general', label: '通用设置' },
+  { key: 'bots', label: '机器人' },
+  { key: 'blacklist', label: '黑名单' },
   { key: 'about', label: '关于' }
 ]
 

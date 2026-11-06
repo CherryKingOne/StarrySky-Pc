@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import AvatarCropDialog from '@renderer/components/AvatarCropDialog.vue'
+import BlacklistPanel from '@renderer/components/BlacklistPanel.vue'
+import BotDirectory from '@renderer/components/BotDirectory.vue'
 import ChangePasswordDialog from '@renderer/components/ChangePasswordDialog.vue'
+import EditProfileDialog from '@renderer/components/EditProfileDialog.vue'
 import ConfirmDialog from '@renderer/components/ConfirmDialog.vue'
 import GroupQrDialog from '@renderer/components/GroupQrDialog.vue'
 import OptionPickerDialog from '@renderer/components/OptionPickerDialog.vue'
@@ -14,6 +17,8 @@ import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { settingsNavs } from '@renderer/data/mock'
 import { logoutSession } from '@renderer/api/auth'
+import { getCurrentUser, updateCurrentUser } from '@renderer/api/users'
+import { uploadFile } from '@renderer/api/files'
 import { useAppStore } from '@renderer/stores/app'
 import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
@@ -32,6 +37,9 @@ const showLanguage = ref(false)
 const showQuiet = ref(false)
 const showDevices = ref(false)
 const showVerify = ref(false)
+const showProfileEdit = ref(false)
+const avatarInput = ref<HTMLInputElement | null>(null)
+const uploadingAvatar = ref(false)
 
 const general = reactive({
   autoLogin: true,
@@ -61,6 +69,9 @@ const nickname = computed(() => app.nickname)
 const avatarIndex = computed(() => app.avatarIndex)
 const accountId = computed(() => app.accountId)
 const phone = computed(() => app.phone)
+const userSignature = computed(() => app.user?.signature ?? '')
+const userGender = computed(() => app.user?.gender ?? 0)
+const userAvatarUrl = computed(() => app.user?.avatarUrl ?? null)
 const resetChannel = computed<'phone' | 'email'>(() =>
   phone.value.includes('@') ? 'email' : 'phone'
 )
@@ -85,7 +96,45 @@ function setQuiet(value: string): void {
 function applyAvatar(index: number): void {
   app.setAvatar(index)
   showCrop.value = false
-  showToast('头像已更新')
+  showToast('头像底色已更新（本地）')
+}
+
+function pickAvatar(): void {
+  avatarInput.value?.click()
+}
+
+async function onAvatarFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !app.accessToken) return
+  uploadingAvatar.value = true
+  try {
+    const info = await uploadFile(app.accessToken, file, 1)
+    const user = await updateCurrentUser(app.accessToken, { avatarUrl: info.url })
+    app.updateUser(user)
+    showToast('头像已上传并保存')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '头像上传失败')
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
+async function saveProfile(payload: {
+  nickname: string
+  signature: string
+  gender: number
+}): Promise<void> {
+  if (!app.accessToken) return
+  try {
+    const user = await updateCurrentUser(app.accessToken, payload)
+    app.updateUser(user)
+    showProfileEdit.value = false
+    showToast('资料已保存')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '资料保存失败')
+  }
 }
 
 function submitChangePassword(): void {
@@ -169,6 +218,16 @@ function openOfficialSite(): void {
 function checkUpdate(): void {
   showToast('当前已是最新版本 v1.0.0')
 }
+
+onMounted(async () => {
+  if (!app.accessToken) return
+  try {
+    const user = await getCurrentUser(app.accessToken)
+    app.updateUser(user)
+  } catch {
+    /* 资料拉取失败不影响设置页 */
+  }
+})
 </script>
 
 <template>
@@ -263,7 +322,12 @@ function checkUpdate(): void {
               class="relative shrink-0"
               @click="showCrop = true"
             >
-              <Avatar :name="nickname" :index="avatarIndex" :size="40" />
+              <Avatar
+                :name="nickname"
+                :index="avatarIndex"
+                :avatar-url="userAvatarUrl"
+                :size="40"
+              />
               <span
                 class="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-on-accent"
               >
@@ -274,14 +338,33 @@ function checkUpdate(): void {
               <p class="text-label text-foreground">{{ nickname }}</p>
               <p class="mt-0.5 text-micro text-secondary-foreground">ID: {{ accountId }}</p>
             </div>
-            <button
-              type="button"
-              class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
-              @click="showQr = true"
-            >
-              <AppIcon name="ion:qr-code" :size="14" />
-              我的二维码
-            </button>
+            <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                @click="showProfileEdit = true"
+              >
+                <AppIcon name="ion:android-create" :size="14" />
+                编辑资料
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover disabled:opacity-50"
+                :disabled="uploadingAvatar"
+                @click="pickAvatar"
+              >
+                <AppIcon name="ion:ios-cloud-upload" :size="14" />
+                {{ uploadingAvatar ? '上传中' : '上传头像' }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                @click="showQr = true"
+              >
+                <AppIcon name="ion:qr-code" :size="14" />
+                我的二维码
+              </button>
+            </div>
           </div>
 
           <div class="mt-4 flex flex-col">
@@ -429,6 +512,16 @@ function checkUpdate(): void {
           </div>
         </template>
 
+        <!-- 机器人：只读目录，创建/删除只在开发者后台 -->
+        <template v-else-if="activeNav === 'bots'">
+          <BotDirectory />
+        </template>
+
+        <!-- 黑名单 -->
+        <template v-else-if="activeNav === 'blacklist'">
+          <BlacklistPanel />
+        </template>
+
         <!-- 关于 -->
         <template v-else>
           <div class="flex flex-col items-center pt-6 text-center">
@@ -496,6 +589,17 @@ function checkUpdate(): void {
       value="starrysky://user/linxiao"
       @close="showQr = false"
       @toast="showToast"
+    />
+
+    <input ref="avatarInput" type="file" accept="image/*" class="hidden" @change="onAvatarFile" />
+
+    <EditProfileDialog
+      :visible="showProfileEdit"
+      :nickname="nickname"
+      :signature="userSignature"
+      :gender="userGender"
+      @close="showProfileEdit = false"
+      @save="saveProfile"
     />
 
     <!-- P15-02 头像裁剪 -->

@@ -16,10 +16,11 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   send: [text: string]
+  typing: []
   toast: [message: string]
-  'send-file': [payload: { name: string; size: string }]
-  'send-image': [payload: { name: string }]
-  'send-audio': [payload: { duration: string }]
+  'send-file': [payload: { name: string; size: string; file: File }]
+  'send-image': [payload: { name: string; file: File }]
+  'send-audio': [payload: { duration: string; blob?: Blob }]
   'send-poll': []
   'send-card': []
   'request-forward': []
@@ -47,6 +48,9 @@ const pickMode = ref<'file' | 'image'>('file')
 const recording = ref(false)
 const recordSeconds = ref(0)
 let recordTimer: ReturnType<typeof setInterval> | undefined
+let mediaRecorder: MediaRecorder | undefined
+let mediaStream: MediaStream | undefined
+const audioChunks: Blob[] = []
 
 const leftTools = [
   { icon: 'ion:ios-heart', key: 'sticker', label: '表情' },
@@ -125,14 +129,14 @@ function onFileChange(event: Event): void {
   input.value = ''
   if (!file) return
   if (pickMode.value === 'image' || file.type.startsWith('image/')) {
-    emit('send-image', { name: file.name })
+    emit('send-image', { name: file.name, file })
     return
   }
   const size =
     file.size > 1024 * 1024
       ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
       : `${Math.max(1, Math.round(file.size / 1024))} KB`
-  emit('send-file', { name: file.name, size })
+  emit('send-file', { name: file.name, size, file })
 }
 
 async function captureScreenshot(): Promise<void> {
@@ -151,27 +155,68 @@ async function captureScreenshot(): Promise<void> {
     canvas.height = video.videoHeight
     canvas.getContext('2d')?.drawImage(video, 0, 0)
     stream.getTracks().forEach((track) => track.stop())
-    emit('send-image', { name: '屏幕截图.png' })
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    if (!blob) {
+      emit('toast', '截图失败')
+      return
+    }
+    emit('send-image', {
+      name: '屏幕截图.png',
+      file: new File([blob], '屏幕截图.png', { type: 'image/png' })
+    })
     emit('toast', '截图已发送')
   } catch {
     emit('toast', '已取消截图')
   }
 }
 
-function toggleRecord(): void {
+async function toggleRecord(): Promise<void> {
   if (recording.value) {
-    recording.value = false
-    if (recordTimer) clearInterval(recordTimer)
-    recordTimer = undefined
-    emit('send-audio', { duration: recordLabel.value })
-    recordSeconds.value = 0
+    stopRecording()
     return
   }
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    emit('toast', '当前环境不支持录音')
+    return
+  }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch {
+    emit('toast', '无法访问麦克风，请检查系统权限')
+    return
+  }
+  audioChunks.length = 0
+  mediaRecorder = new MediaRecorder(mediaStream)
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) audioChunks.push(event.data)
+  }
+  mediaRecorder.onstop = () => {
+    const duration = recordSeconds.value
+    const label = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`
+    const blob = audioChunks.length
+      ? new Blob(audioChunks, { type: mediaRecorder?.mimeType || 'audio/webm' })
+      : undefined
+    mediaStream?.getTracks().forEach((track) => track.stop())
+    mediaStream = undefined
+    mediaRecorder = undefined
+    recordSeconds.value = 0
+    emit('send-audio', { duration: label, blob: blob && duration > 0 ? blob : undefined })
+  }
+  mediaRecorder.start()
   recording.value = true
   recordSeconds.value = 0
   recordTimer = setInterval(() => {
     recordSeconds.value += 1
   }, 1000)
+}
+
+function stopRecording(): void {
+  recording.value = false
+  if (recordTimer) clearInterval(recordTimer)
+  recordTimer = undefined
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
 }
 
 function onToolClick(key: string): void {
@@ -195,7 +240,7 @@ function onToolClick(key: string): void {
       showMoreMenu.value = !showMoreMenu.value
       break
     case 'voice':
-      toggleRecord()
+      void toggleRecord()
       break
     case 'list':
       emit('action', 'history')
@@ -241,6 +286,8 @@ function onStickerSelect(emoji: string): void {
 
 onBeforeUnmount(() => {
   if (recordTimer) clearInterval(recordTimer)
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop()
+  mediaStream?.getTracks().forEach((track) => track.stop())
 })
 </script>
 
@@ -319,6 +366,7 @@ onBeforeUnmount(() => {
       class="mt-2 flex-1 w-full resize-none bg-transparent px-5 text-base text-foreground outline-none placeholder:text-placeholder-foreground"
       placeholder="Enter 发送，Shift+Enter 换行"
       @keydown="onKeydown"
+      @input="emit('typing')"
     />
 
     <div class="flex items-center justify-end gap-3 px-3 pb-3">

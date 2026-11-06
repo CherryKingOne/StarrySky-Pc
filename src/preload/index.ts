@@ -16,11 +16,24 @@ interface ProxyResponse {
   error?: string
 }
 
+interface UploadRequest {
+  url: string
+  token?: string
+  fileName?: string
+  contentType?: string
+  data: ArrayBuffer
+  fields?: Record<string, string>
+  timeout?: number
+}
+
 // Custom APIs for renderer
 const api = {
   /** 通过主进程转发 HTTP 请求，避免渲染进程 CORS 限制 */
   request: (payload: ProxyRequest): Promise<ProxyResponse> =>
-    ipcRenderer.invoke('api:request', payload)
+    ipcRenderer.invoke('api:request', payload),
+  /** multipart 文件上传 */
+  upload: (payload: UploadRequest): Promise<ProxyResponse> =>
+    ipcRenderer.invoke('api:upload', payload)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

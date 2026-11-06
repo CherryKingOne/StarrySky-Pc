@@ -31,6 +31,12 @@ const memberCount = computed(() => {
   if (props.conversation.group) return members.value.length
   return 2
 })
+
+const subtitle = computed(() => {
+  if (props.conversation.bot) return `机器人 · ${props.conversation.bot.description || '暂无简介'}`
+  if (props.conversation.group) return `${memberCount.value} 位成员`
+  return props.conversation.targetSignature || '在线'
+})
 </script>
 
 <template>
@@ -49,10 +55,15 @@ const memberCount = computed(() => {
     </div>
 
     <div class="mt-3 flex flex-col items-center px-5">
-      <Avatar :name="conversation.name" :index="conversation.avatarIndex" :size="64" />
+      <Avatar
+        :name="conversation.name"
+        :index="conversation.avatarIndex"
+        :avatar-url="conversation.avatarUrl"
+        :size="64"
+      />
       <h4 class="mt-2 text-center text-section text-foreground">{{ conversation.name }}</h4>
       <p class="mt-0.5 text-center text-caption text-secondary-foreground">
-        {{ conversation.group ? `${memberCount} 位成员` : '在线' }}
+        {{ subtitle }}
       </p>
     </div>
 
@@ -92,6 +103,21 @@ const memberCount = computed(() => {
       >
         查看全部 {{ members.length }} 位群成员
       </button>
+    </div>
+
+    <!-- 机器人：只展示资料，不提供通话 -->
+    <div v-else-if="conversation.bot" class="mt-4 px-5">
+      <div class="rounded-md bg-item-hover p-3">
+        <p class="text-caption text-secondary-foreground">机器人 ID</p>
+        <p class="mt-1 break-all text-small text-foreground">{{ conversation.bot.botId }}</p>
+        <p class="mt-3 text-caption text-secondary-foreground">简介</p>
+        <p class="mt-1 text-small text-foreground">
+          {{ conversation.bot.description || '暂无简介' }}
+        </p>
+        <p class="mt-3 text-micro text-tertiary-foreground">
+          机器人由开发者后台创建和管理，客户端不能删除机器人。
+        </p>
+      </div>
     </div>
 
     <!-- 单人：快捷操作 -->
@@ -193,7 +219,7 @@ const memberCount = computed(() => {
         <AppIcon name="ion:ios-arrow-right" :size="14" class="ml-auto text-tertiary-foreground" />
       </button>
       <button
-        v-else
+        v-else-if="!conversation.bot"
         type="button"
         class="flex h-10 items-center gap-3 rounded-sm px-3 text-left text-small text-foreground transition-colors hover:bg-item-hover"
         @click="emit('open-qr-self')"

@@ -3,13 +3,14 @@ import { computed, ref, watch } from 'vue'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import PopupDialog from '@renderer/components/PopupDialog.vue'
-import { contacts } from '@renderer/data/mock'
+import { useContactsStore } from '@renderer/stores/contacts'
 
 const props = defineProps<{ visible: boolean }>()
+const contacts = useContactsStore()
 
 const emit = defineEmits<{
   close: []
-  start: [payload: { name: string; index: number }]
+  start: [payload: { userId: string; name: string; index: number }]
 }>()
 
 const keyword = ref('')
@@ -21,28 +22,33 @@ watch(
     if (visible) {
       keyword.value = ''
       selectedId.value = ''
+      void contacts.load()
     }
   }
 )
 
 const people = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
-  return contacts
-    .filter((item) => item.group !== '快捷入口')
-    .filter(
-      (item) =>
-        !kw ||
-        item.name.toLowerCase().includes(kw) ||
-        item.desc.toLowerCase().includes(kw) ||
-        (item.department ?? '').toLowerCase().includes(kw)
-    )
+  return contacts.friends.filter(
+    (item) =>
+      !kw ||
+      item.name.toLowerCase().includes(kw) ||
+      item.desc.toLowerCase().includes(kw) ||
+      (item.username ?? '').toLowerCase().includes(kw)
+  )
 })
 
-const selected = computed(() => contacts.find((item) => item.id === selectedId.value) ?? null)
+const selected = computed(
+  () => contacts.friends.find((item) => item.id === selectedId.value) ?? null
+)
 
 function confirm(): void {
-  if (!selected.value) return
-  emit('start', { name: selected.value.name, index: selected.value.avatarIndex })
+  if (!selected.value?.userId) return
+  emit('start', {
+    userId: selected.value.userId,
+    name: selected.value.name,
+    index: selected.value.avatarIndex
+  })
   emit('close')
 }
 </script>
@@ -78,11 +84,16 @@ function confirm(): void {
           :class="selectedId === person.id ? 'bg-conv-active' : 'hover:bg-item-hover'"
           @click="selectedId = person.id"
         >
-          <Avatar :name="person.name" :index="person.avatarIndex" :size="32" />
+          <Avatar
+            :name="person.name"
+            :index="person.avatarIndex"
+            :avatar-url="person.avatarUrl"
+            :size="32"
+          />
           <div class="min-w-0 flex-1">
             <p class="truncate text-small text-foreground">{{ person.name }}</p>
             <p class="truncate text-micro text-tertiary-foreground">
-              {{ person.desc }}<span v-if="person.department"> · {{ person.department }}</span>
+              {{ person.desc }}<span v-if="person.username"> · {{ person.username }}</span>
             </p>
           </div>
           <AppIcon

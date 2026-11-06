@@ -2,14 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import Avatar from '@renderer/components/Avatar.vue'
 import PopupDialog from '@renderer/components/PopupDialog.vue'
-import { contacts } from '@renderer/data/mock'
-import type { MemberInfo } from '@renderer/types'
+import { useContactsStore } from '@renderer/stores/contacts'
 
 const props = defineProps<{ visible: boolean }>()
+const contacts = useContactsStore()
 
 const emit = defineEmits<{
   close: []
-  create: [payload: { name: string; members: MemberInfo[] }]
+  create: [payload: { name: string; members: { userId: string; name: string; index: number }[] }]
 }>()
 
 const name = ref('')
@@ -21,16 +21,22 @@ watch(
     if (visible) {
       name.value = ''
       selected.value = []
+      void contacts.load()
     }
   }
 )
 
-const people = computed(() => contacts.filter((item) => item.group !== '快捷入口'))
+const people = computed(() => contacts.friends)
 
-const members = computed<MemberInfo[]>(() =>
+const members = computed(() =>
   people.value
     .filter((person) => selected.value.includes(person.id))
-    .map((person) => ({ name: person.name, index: person.avatarIndex, role: '成员' as const }))
+    .map((person) => ({
+      userId: person.userId ?? '',
+      name: person.name,
+      index: person.avatarIndex
+    }))
+    .filter((person) => person.userId)
 )
 
 function toggle(id: string): void {
@@ -84,7 +90,12 @@ function confirm(): void {
           class="flex h-12 w-full items-center gap-3 rounded-sm px-2 text-left transition-colors hover:bg-item-hover"
           @click="toggle(person.id)"
         >
-          <Avatar :name="person.name" :index="person.avatarIndex" :size="32" />
+          <Avatar
+            :name="person.name"
+            :index="person.avatarIndex"
+            :avatar-url="person.avatarUrl"
+            :size="32"
+          />
           <div class="min-w-0 flex-1">
             <p class="truncate text-small text-foreground">{{ person.name }}</p>
             <p class="truncate text-micro text-tertiary-foreground">{{ person.desc }}</p>
@@ -104,7 +115,7 @@ function confirm(): void {
     </div>
 
     <template #footer>
-      <span class="mr-auto text-micro text-tertiary-foreground">群主：林晓</span>
+      <span class="mr-auto text-micro text-tertiary-foreground">群主：我</span>
       <button
         type="button"
         class="btn-primary h-9 px-5 disabled:opacity-50"

@@ -89,15 +89,23 @@ watch(
         </button>
 
         <div
-          class="flex h-[62vh] w-[70%] max-w-[900px] flex-col items-center justify-center gap-3 rounded-lg shadow-modal"
-          :style="{ background }"
+          class="flex max-h-[62vh] w-[70%] max-w-[900px] flex-col items-center justify-center gap-3 overflow-hidden rounded-lg shadow-modal"
+          :style="active?.imageUrl ? undefined : { background }"
         >
-          <AppIcon name="ion:image" :size="48" class="text-foreground/40" />
-          <span class="text-small text-secondary-foreground">{{
-            active?.imageLabel || '图片'
-          }}</span>
-          <span class="text-micro text-tertiary-foreground">
-            {{ current + 1 }} / {{ images.length }} · 设计稿约定图片为规范占位
+          <img
+            v-if="active?.imageUrl"
+            :src="active.imageUrl"
+            :alt="active.imageLabel || '图片'"
+            class="max-h-[58vh] max-w-full object-contain"
+          />
+          <template v-else>
+            <AppIcon name="ion:image" :size="48" class="text-foreground/40" />
+            <span class="text-small text-secondary-foreground">{{
+              active?.imageLabel || '图片'
+            }}</span>
+          </template>
+          <span class="pb-2 text-micro text-tertiary-foreground">
+            {{ current + 1 }} / {{ images.length }}
           </span>
         </div>
 
@@ -124,7 +132,14 @@ watch(
           "
           @click="current = thumbIndex"
         >
+          <img
+            v-if="image.imageUrl"
+            :src="image.imageUrl"
+            :alt="image.imageLabel || '图片'"
+            class="h-full w-full object-cover"
+          />
           <div
+            v-else
             class="flex h-full w-full items-center justify-center"
             :style="{ background: TONES[(image.imageTone ?? 1) % TONES.length] }"
           >

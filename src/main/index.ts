@@ -146,6 +146,61 @@ function registerIpc(): void {
     }
   )
 
+  // 文件上传：渲染进程把文件二进制传到主进程，由主进程组装 multipart 绕过 CORS
+  ipcMain.handle(
+    'api:upload',
+    async (
+      _event,
+      payload: {
+        url: string
+        token?: string
+        fileName?: string
+        contentType?: string
+        data: ArrayBuffer
+        fields?: Record<string, string>
+        timeout?: number
+      }
+    ): Promise<{ ok: boolean; status: number; text: string; error?: string }> => {
+      if (!payload?.url || !/^https?:\/\//i.test(payload.url)) {
+        return { ok: false, status: 0, text: '', error: 'invalid url' }
+      }
+
+      const timeout = Math.min(Math.max(payload.timeout ?? 30000, 1000), 120000)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeout)
+
+      try {
+        const form = new FormData()
+        for (const [key, value] of Object.entries(payload.fields ?? {})) {
+          form.append(key, value)
+        }
+        form.append(
+          'file',
+          new Blob([new Uint8Array(payload.data)], {
+            type: payload.contentType || 'application/octet-stream'
+          }),
+          payload.fileName || 'file'
+        )
+        const response = await fetch(payload.url, {
+          method: 'POST',
+          headers: payload.token ? { Authorization: `Bearer ${payload.token}` } : undefined,
+          body: form,
+          signal: controller.signal
+        })
+        return { ok: response.ok, status: response.status, text: await response.text() }
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          text: '',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+  )
+
   // 登录成功：先创建主窗口，再关闭登录卡片，避免中间出现“无窗口”状态
   ipcMain.on('auth:login', () => {
     createMainWindow()

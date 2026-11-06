@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -7,8 +7,9 @@ const props = withDefaults(
     index?: number
     size?: 32 | 36 | 40 | 64 | 96
     rounded?: boolean
+    avatarUrl?: string | null
   }>(),
-  { index: 1, size: 36, rounded: true }
+  { index: 1, size: 36, rounded: true, avatarUrl: null }
 )
 
 const colorClass = computed(() => `bg-avatar-${props.index}`)
@@ -20,13 +21,29 @@ const sizeClass = computed(() => {
   return 'h-9 w-9 text-sm'
 })
 const initial = computed(() => props.name.trim().charAt(0).toUpperCase() || '#')
+
+const failed = ref(false)
+watch(
+  () => props.avatarUrl,
+  () => {
+    failed.value = false
+  }
+)
+const showImage = computed(() => Boolean(props.avatarUrl) && !failed.value)
 </script>
 
 <template>
   <div
-    class="flex shrink-0 select-none items-center justify-center font-medium text-on-accent"
-    :class="[colorClass, sizeClass, rounded ? 'rounded-md' : 'rounded-full']"
+    class="relative shrink-0 select-none overflow-hidden font-medium text-on-accent"
+    :class="[showImage ? '' : colorClass, sizeClass, rounded ? 'rounded-md' : 'rounded-full']"
   >
-    {{ initial }}
+    <img
+      v-if="showImage"
+      :src="avatarUrl ?? ''"
+      :alt="name"
+      class="h-full w-full object-cover"
+      @error="failed = true"
+    />
+    <span v-else class="flex h-full w-full items-center justify-center">{{ initial }}</span>
   </div>
 </template>

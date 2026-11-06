@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
@@ -50,6 +50,11 @@ watch(
 )
 
 const suggestions = ['评审', '设计规范', '打包脚本', '群公告']
+
+onMounted(async () => {
+  await store.load()
+  await store.prefetchHistories()
+})
 
 const showForwardDetail = ref(false)
 const forwardDetail = ref<ChatMessage | null>(null)

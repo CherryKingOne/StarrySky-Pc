@@ -1,9 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppIcon from '@renderer/components/AppIcon.vue'
+import Avatar from '@renderer/components/Avatar.vue'
+import { avatarIndexOf } from '@renderer/utils/chat'
 import type { ChatMessage } from '@renderer/types'
 
-const props = defineProps<{ message: ChatMessage; highlight?: boolean }>()
+interface MessageAvatar {
+  name: string
+  index?: number
+  avatarUrl?: string | null
+}
+
+const props = withDefaults(
+  defineProps<{
+    message: ChatMessage
+    highlight?: boolean
+    /** 自己（右侧）头像，未传时用「我」的首字占位 */
+    selfAvatar?: MessageAvatar
+    /** 对方（左侧）头像，未传时按消息发送者生成首字占位 */
+    senderAvatar?: MessageAvatar
+  }>(),
+  { highlight: false, selfAvatar: undefined, senderAvatar: undefined }
+)
 
 const emit = defineEmits<{
   contextmenu: [event: MouseEvent]
@@ -22,6 +40,16 @@ const subText = computed(() => (isOut.value ? 'text-on-accent/80' : 'text-second
 const hintText = computed(() => (isOut.value ? 'text-on-accent/70' : 'text-hint-foreground'))
 const bubbleBorder = computed(() =>
   isOut.value ? 'border border-white/20' : 'border border-black/10'
+)
+
+const incomingAvatar = computed<MessageAvatar>(() => {
+  if (props.senderAvatar) return props.senderAvatar
+  const name = props.message.sender || '对方'
+  return { name, index: avatarIndexOf(name), avatarUrl: null }
+})
+
+const outgoingAvatar = computed<MessageAvatar>(
+  () => props.selfAvatar ?? { name: '我', index: 1, avatarUrl: null }
 )
 
 const TONES = [
@@ -50,17 +78,36 @@ function onContextMenu(event: MouseEvent): void {
   event.preventDefault()
   emit('contextmenu', event)
 }
+
+function playAudio(): void {
+  if (props.message.audioUrl) {
+    const audio = new Audio(props.message.audioUrl)
+    audio.play().catch(() => emit('play-audio', props.message))
+    return
+  }
+  emit('play-audio', props.message)
+}
 </script>
 
 <template>
   <div
-    class="mb-5 flex w-full items-end transition-colors"
+    class="mb-5 flex w-full items-end gap-2 transition-colors"
     :class="[
       isOut ? 'justify-end' : 'justify-start',
       highlight ? 'rounded-md bg-message-selected py-1' : ''
     ]"
     @contextmenu="onContextMenu"
   >
+    <Avatar
+      v-if="!isOut && message.kind !== 'notification'"
+      class="mb-0.5 shrink-0"
+      :name="incomingAvatar.name"
+      :index="incomingAvatar.index ?? avatarIndexOf(incomingAvatar.name)"
+      :avatar-url="incomingAvatar.avatarUrl"
+      :rounded="false"
+      :size="32"
+    />
+
     <div v-if="message.kind === 'notification'" class="w-full text-center">
       <span class="text-caption text-tertiary-foreground">{{ message.text }}</span>
     </div>
@@ -92,7 +139,7 @@ function onContextMenu(event: MouseEvent): void {
       type="button"
       class="bubble flex cursor-pointer items-center gap-3 border transition-opacity hover:opacity-90"
       :class="[bubbleBg, bubbleBorder]"
-      @click="emit('play-audio', message)"
+      @click="playAudio"
     >
       <AppIcon name="ion:ios-mic" :size="18" class="shrink-0 text-accent" />
       <div class="flex h-5 items-end gap-0.5">
@@ -114,7 +161,14 @@ function onContextMenu(event: MouseEvent): void {
       :class="[bubbleBg, bubbleBorder]"
       @click="emit('preview', message)"
     >
+      <img
+        v-if="message.imageUrl"
+        :src="message.imageUrl"
+        :alt="message.imageLabel || '图片'"
+        class="max-h-[240px] max-w-[260px] rounded-sm object-cover"
+      />
       <div
+        v-else
         class="flex h-[140px] w-[220px] flex-col items-center justify-center gap-2 rounded-sm"
         :style="imageStyle"
       >
@@ -222,5 +276,15 @@ function onContextMenu(event: MouseEvent): void {
     >
       <p class="text-message" :class="bubbleText">{{ message.text }}</p>
     </div>
+
+    <Avatar
+      v-if="isOut && message.kind !== 'notification'"
+      class="mb-0.5 shrink-0"
+      :name="outgoingAvatar.name"
+      :index="outgoingAvatar.index ?? avatarIndexOf(outgoingAvatar.name)"
+      :avatar-url="outgoingAvatar.avatarUrl"
+      :rounded="false"
+      :size="32"
+    />
   </div>
 </template>

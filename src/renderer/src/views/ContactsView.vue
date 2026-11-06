@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AddActions from '@renderer/components/AddActions.vue'
 import AppIcon from '@renderer/components/AppIcon.vue'
@@ -11,25 +11,23 @@ import ListRow from '@renderer/components/ListRow.vue'
 import SearchBar from '@renderer/components/SearchBar.vue'
 import Toast from '@renderer/components/Toast.vue'
 import UserCardModal from '@renderer/components/UserCardModal.vue'
-import {
-  channels as channelSeed,
-  contacts,
-  friendRequests as requestSeed,
-  groups,
-  orgTree
-} from '@renderer/data/mock'
+import { channels as channelSeed, orgTree } from '@renderer/data/mock'
+import { useContactsStore } from '@renderer/stores/contacts'
 import { useConversationsStore } from '@renderer/stores/conversations'
+import { useAppStore } from '@renderer/stores/app'
+import { blockUser } from '@renderer/api/blocks'
 import type { CallMode, ContactEntry, FriendRequest } from '@renderer/types'
 
 const router = useRouter()
 const store = useConversationsStore()
+const contacts = useContactsStore()
+const app = useAppStore()
 
 const keyword = ref('')
 const selectedId = ref('')
 const addActions = ref<InstanceType<typeof AddActions> | null>(null)
 const toastMessage = ref('')
 
-const requests = reactive<FriendRequest[]>(requestSeed.map((item) => ({ ...item })))
 const channels = reactive(channelSeed.map((item) => ({ ...item, posts: [...item.posts] })))
 const activeChannelId = ref('')
 const expanded = ref<string[]>(['org-1', 'org-2', 'org-3', 'org-4'])
@@ -37,7 +35,7 @@ const showCall = ref(false)
 const callMode = ref<CallMode>('audio')
 const showCard = ref(false)
 const showContactQr = ref(false)
-const card = ref({ name: '', desc: '', index: 1 })
+const card = ref({ name: '', desc: '', index: 1, userId: '', avatarUrl: null as string | null })
 
 function showToast(message: string): void {
   toastMessage.value = ''
@@ -46,11 +44,32 @@ function showToast(message: string): void {
   }, 0)
 }
 
-const quickEntries = computed(() => {
+const quickEntries = computed<ContactEntry[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
-  return contacts
-    .filter((item) => item.group === '快捷入口')
-    .filter((item) => !kw || item.name.toLowerCase().includes(kw))
+  return [
+    {
+      id: 'c-0',
+      name: '新的朋友',
+      avatarIndex: 3,
+      desc: `${contacts.pendingRequests.length} 条好友申请`,
+      group: '快捷入口'
+    },
+    {
+      id: 'c-1',
+      name: '群聊',
+      avatarIndex: 2,
+      desc: `${contacts.groups.length} 个群聊`,
+      group: '快捷入口'
+    },
+    {
+      id: 'c-2',
+      name: '频道',
+      avatarIndex: 5,
+      desc: `${channels.length} 个频道`,
+      group: '快捷入口'
+    },
+    { id: 'c-3', name: '组织架构', avatarIndex: 1, desc: '野火科技', group: '快捷入口' }
+  ].filter((item) => !kw || item.name.toLowerCase().includes(kw))
 })
 
 interface ContactGroup {
@@ -61,48 +80,72 @@ interface ContactGroup {
 const groupsList = computed<ContactGroup[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   const map = new Map<string, ContactEntry[]>()
-  for (const item of contacts) {
-    if (item.group === '快捷入口') continue
+  for (const item of contacts.friends) {
     if (kw && !item.name.toLowerCase().includes(kw) && !item.desc.toLowerCase().includes(kw))
       continue
-    const label = item.group ?? ''
+    const label = item.group ?? '#'
     if (!map.has(label)) map.set(label, [])
     map.get(label)!.push(item)
   }
-  return [...map.entries()].map(([label, items]) => ({ label, items }))
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, items]) => ({ label, items }))
 })
 
-const selected = computed(() => contacts.find((item) => item.id === selectedId.value) ?? null)
+const groupList = computed(() => contacts.groups)
+const allEntries = computed(() => [...quickEntries.value, ...contacts.friends])
+const selected = computed(
+  () => allEntries.value.find((item) => item.id === selectedId.value) ?? null
+)
 const activeChannel = computed(
   () => channels.find((item) => item.id === activeChannelId.value) ?? null
 )
 
-const pendingRequests = computed(() => requests.filter((item) => item.status === 'pending'))
+const pendingRequests = computed(() => contacts.pendingRequests)
+const requests = computed(() => contacts.requests)
 
 function select(id: string): void {
   selectedId.value = id
   activeChannelId.value = ''
 }
 
-function startChat(name = selected.value?.name, index = selected.value?.avatarIndex): void {
-  if (!name || index === undefined) return
-  store.ensureConversation(name, index)
+async function startChat(): Promise<void> {
+  const target = selected.value
+  if (!target?.userId) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await store.openWithUser(target.userId)
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
+}
+
+async function openGroup(conversationId: string): Promise<void> {
+  await store.setActive(conversationId)
   void router.push('/chats')
 }
 
-function openGroup(conversationId: string): void {
-  store.setActive(conversationId)
-  void router.push('/chats')
+async function acceptRequest(request: FriendRequest): Promise<void> {
+  if (!request.requestId) return
+  try {
+    await contacts.acceptRequest(request.requestId)
+    showToast(`已添加 ${request.name} 为好友`)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '处理好友申请失败')
+  }
 }
 
-function acceptRequest(request: FriendRequest): void {
-  request.status = 'accepted'
-  showToast(`已添加 ${request.name} 为好友`)
-}
-
-function ignoreRequest(request: FriendRequest): void {
-  request.status = 'ignored'
-  showToast('已忽略该好友申请')
+async function ignoreRequest(request: FriendRequest): Promise<void> {
+  if (!request.requestId) return
+  try {
+    await contacts.rejectRequest(request.requestId)
+    showToast('已忽略该好友申请')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '处理好友申请失败')
+  }
 }
 
 function enterChannel(id: string): void {
@@ -128,7 +171,13 @@ function toggleExpand(id: string): void {
 }
 
 function openMember(name: string, title: string | undefined, index: number | undefined): void {
-  card.value = { name, desc: title ?? '组织成员', index: index ?? 2 }
+  card.value = {
+    name,
+    desc: title ?? '组织成员',
+    index: index ?? 2,
+    userId: '',
+    avatarUrl: null
+  }
   showCard.value = true
 }
 
@@ -137,17 +186,36 @@ function startCall(mode: CallMode): void {
   showCall.value = true
 }
 
-function onAddStart(payload: { name: string; index: number }): void {
-  store.ensureConversation(payload.name, payload.index)
-  void router.push('/chats')
+async function onAddStart(payload: { userId: string; name: string; index: number }): Promise<void> {
+  if (!payload.userId) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await store.openWithUser(payload.userId)
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
 }
 
-function onAddCreate(payload: { name: string; members: { name: string; index: number }[] }): void {
-  store.createGroup(
-    payload.name,
-    payload.members.map((member) => ({ ...member, role: '成员' as const }))
-  )
-  void router.push('/chats')
+async function onAddCreate(payload: {
+  name: string
+  members: { userId: string; name: string; index: number }[]
+}): Promise<void> {
+  const memberIds = payload.members.map((member) => member.userId).filter(Boolean)
+  if (memberIds.length === 0) {
+    showToast('请至少选择一位成员')
+    return
+  }
+  try {
+    await store.createGroup(payload.name, memberIds)
+    await contacts.load(true)
+    void router.push('/chats')
+    showToast('群聊已创建')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '创建群聊失败')
+  }
 }
 
 function openSelectedCard(): void {
@@ -155,20 +223,58 @@ function openSelectedCard(): void {
   card.value = {
     name: selected.value.name,
     desc: selected.value.desc,
-    index: selected.value.avatarIndex
+    index: selected.value.avatarIndex,
+    userId: selected.value.userId ?? '',
+    avatarUrl: selected.value.avatarUrl ?? null
   }
   showCard.value = true
 }
 
-function onCardStartChat(): void {
+async function onCardStartChat(): Promise<void> {
   showCard.value = false
-  startChat(card.value.name, card.value.index)
+  if (!card.value.userId) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await store.openWithUser(card.value.userId)
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
 }
 
-function onCardAddFriend(): void {
+async function onCardAddFriend(): Promise<void> {
   showCard.value = false
-  showToast('已发送好友申请')
+  if (!card.value.userId) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await contacts.sendFriendRequest(card.value.userId, '你好，申请添加你为好友')
+    showToast('已发送好友申请')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '好友申请发送失败')
+  }
 }
+
+async function onCardBlock(): Promise<void> {
+  showCard.value = false
+  if (!card.value.userId || !app.accessToken) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await blockUser(app.accessToken, card.value.userId)
+    showToast(`已拉黑 ${card.value.name}`)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '拉黑失败')
+  }
+}
+
+onMounted(() => {
+  void contacts.load()
+})
 
 function onCardQr(): void {
   showCard.value = false
@@ -200,6 +306,7 @@ function onCardQr(): void {
             :key="entry.id"
             :name="entry.name"
             :index="entry.avatarIndex"
+            :avatar-url="entry.avatarUrl"
             :desc="entry.desc"
             :class="selectedId === entry.id ? 'bg-conv-active' : ''"
             @click="select(entry.id)"
@@ -231,7 +338,12 @@ function onCardQr(): void {
             :key="request.id"
             class="mb-2 flex items-center gap-3 rounded-md bg-panel p-3"
           >
-            <Avatar :name="request.name" :index="request.avatarIndex" :size="40" />
+            <Avatar
+              :name="request.name"
+              :index="request.avatarIndex"
+              :avatar-url="request.avatarUrl"
+              :size="40"
+            />
             <div class="min-w-0 flex-1">
               <p class="truncate text-small text-foreground">{{ request.name }}</p>
               <p class="truncate text-micro text-secondary-foreground">{{ request.message }}</p>
@@ -273,7 +385,7 @@ function onCardQr(): void {
         >
           <div>
             <h2 class="text-section text-foreground">群聊</h2>
-            <p class="text-caption text-secondary-foreground">{{ groups.length }} 个群聊</p>
+            <p class="text-caption text-secondary-foreground">{{ groupList.length }} 个群聊</p>
           </div>
           <button
             type="button"
@@ -285,11 +397,16 @@ function onCardQr(): void {
         </header>
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           <div
-            v-for="group in groups"
+            v-for="group in groupList"
             :key="group.id"
             class="mb-2 flex items-center gap-3 rounded-md bg-panel p-3"
           >
-            <Avatar :name="group.name" :index="group.avatarIndex" :size="40" />
+            <Avatar
+              :name="group.name"
+              :index="group.avatarIndex"
+              :avatar-url="group.avatarUrl"
+              :size="40"
+            />
             <div class="min-w-0 flex-1">
               <p class="truncate text-small text-foreground">{{ group.name }}</p>
               <p class="truncate text-micro text-secondary-foreground">
@@ -467,7 +584,12 @@ function onCardQr(): void {
         />
 
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-4">
-          <Avatar :name="selected.name" :index="selected.avatarIndex" :size="64" />
+          <Avatar
+            :name="selected.name"
+            :index="selected.avatarIndex"
+            :avatar-url="selected.avatarUrl"
+            :size="64"
+          />
           <div class="text-center">
             <p class="text-section text-foreground">{{ selected.name }}</p>
             <p class="mt-1 text-caption text-secondary-foreground">
@@ -528,11 +650,13 @@ function onCardQr(): void {
       :name="card.name"
       :desc="card.desc"
       :avatar-index="card.index"
-      account-id="wildfire"
+      :avatar-url="card.avatarUrl"
+      :account-id="card.userId || 'wildfire'"
       @close="showCard = false"
       @start-chat="onCardStartChat"
       @add-friend="onCardAddFriend"
       @qr="onCardQr"
+      @block="onCardBlock"
     />
 
     <GroupQrDialog

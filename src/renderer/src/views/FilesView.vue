@@ -1,34 +1,65 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import EmptyState from '@renderer/components/EmptyState.vue'
 import ForwardDialog from '@renderer/components/ForwardDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
-import { files as seed } from '@renderer/data/mock'
 import { useConversationsStore } from '@renderer/stores/conversations'
 import type { FileEntry } from '@renderer/types'
 
 const router = useRouter()
 const store = useConversationsStore()
 
-const fileList = reactive<FileEntry[]>(seed.map((item) => ({ ...item })))
 const keyword = ref('')
 const onlyStarred = ref(false)
 const selectedId = ref('')
 const showForward = ref(false)
 const toastMessage = ref('')
+const starred = ref<string[]>([])
+
+function kindOf(name: string, isImage: boolean): FileEntry['kind'] {
+  if (isImage) return 'image'
+  if (/\.pdf$/i.test(name)) return 'pdf'
+  if (/\.(ppt|pptx)$/i.test(name)) return 'ppt'
+  if (/\.(zip|rar|7z)$/i.test(name)) return 'zip'
+  return 'doc'
+}
+
+const fileList = computed<FileEntry[]>(() => {
+  const result: FileEntry[] = []
+  for (const conversation of store.list) {
+    for (const message of conversation.messages) {
+      if (message.kind !== 'file' && message.kind !== 'image') continue
+      if (!message.fileUrl && !message.fileId) continue
+      const name = message.fileName || message.imageLabel || '未命名文件'
+      result.push({
+        id: message.id,
+        name,
+        size: message.fileSize || '',
+        kind: kindOf(name, message.kind === 'image'),
+        from: message.sender ?? '我',
+        time: message.time,
+        conversationId: conversation.id,
+        starred: starred.value.includes(message.id),
+        url: message.fileUrl,
+        fileId: message.fileId
+      })
+    }
+  }
+  return result.reverse()
+})
 
 const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
-  return fileList.filter(
+  return fileList.value.filter(
     (file) =>
       (!onlyStarred.value || file.starred) &&
       (!kw || file.name.toLowerCase().includes(kw) || file.from.toLowerCase().includes(kw))
   )
 })
 
-const selected = computed(() => fileList.find((file) => file.id === selectedId.value) ?? null)
+const selected = computed(() => fileList.value.find((file) => file.id === selectedId.value) ?? null)
 
 const forwardLines = computed(() =>
   selected.value ? [`${selected.value.from}：${selected.value.name}`] : []
@@ -56,21 +87,34 @@ function showToast(message: string): void {
 
 function openFile(): void {
   if (!selected.value) return
-  showToast(`已使用系统默认应用打开「${selected.value.name}」`)
+  if (selected.value.url) {
+    window.open(selected.value.url, '_blank')
+    showToast(`已打开「${selected.value.name}」`)
+    return
+  }
+  showToast('该文件没有可用的下载地址')
 }
 
 function toggleStar(): void {
-  if (!selected.value) return
-  selected.value.starred = !selected.value.starred
-  showToast(selected.value.starred ? '已收藏该文件' : '已取消收藏')
+  const file = selected.value
+  if (!file) return
+  const index = starred.value.indexOf(file.id)
+  if (index > -1) starred.value.splice(index, 1)
+  else starred.value.push(file.id)
+  showToast(index > -1 ? '已取消收藏' : '已收藏该文件')
 }
 
 function locate(): void {
   if (!selected.value) return
-  store.setActive(selected.value.conversationId)
+  void store.setActive(selected.value.conversationId)
   void router.push('/chats')
   showToast('已定位到所在会话')
 }
+
+onMounted(async () => {
+  await store.load()
+  await store.prefetchHistories()
+})
 </script>
 
 <template>

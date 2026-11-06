@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
@@ -93,6 +93,11 @@ function backToChat(): void {
 function exportHistory(): void {
   showToast('聊天记录已导出为 HTML（演示）')
 }
+
+onMounted(async () => {
+  await store.load()
+  if (conversationId.value) await store.loadHistory(conversationId.value)
+})
 </script>
 
 <template>

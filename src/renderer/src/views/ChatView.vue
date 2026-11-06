@@ -24,10 +24,16 @@ import SearchBar from '@renderer/components/SearchBar.vue'
 import StatsDialog from '@renderer/components/StatsDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
 import UserCardModal from '@renderer/components/UserCardModal.vue'
+import { useAppStore } from '@renderer/stores/app'
 import { useConversationsStore, type ConversationFilter } from '@renderer/stores/conversations'
+import { leaveGroup as leaveGroupApi } from '@renderer/api/groups'
+import { sendFriendRequest } from '@renderer/api/friends'
+import { blockUser } from '@renderer/api/blocks'
+import { avatarIndexOf } from '@renderer/utils/chat'
 import type { CallMode, ChatMessage, Conversation } from '@renderer/types'
 
 const store = useConversationsStore()
+const app = useAppStore()
 const router = useRouter()
 
 const keyword = ref('')
@@ -46,6 +52,56 @@ function showToast(message: string): void {
 const active = computed(() => store.activeConversation)
 const totalUnread = computed(() => store.totalUnread)
 const highlightId = computed(() => store.highlightId)
+const selfAvatar = computed(() => ({
+  name: app.nickname || '我',
+  index: app.avatarIndex,
+  avatarUrl: app.user?.avatarUrl ?? null
+}))
+
+function senderAvatarOf(message: ChatMessage): {
+  name: string
+  index: number
+  avatarUrl: string | null
+} {
+  const conversation = active.value
+  if (!conversation) {
+    return { name: message.sender || '对方', index: 1, avatarUrl: null }
+  }
+  if (conversation.bot && message.senderId === conversation.bot.botId) {
+    return {
+      name: conversation.bot.nickname,
+      index: conversation.avatarIndex,
+      avatarUrl: conversation.bot.avatarUrl
+    }
+  }
+  if (message.senderId) {
+    const profile = store.profiles[message.senderId]
+    if (profile) {
+      return {
+        name: profile.nickname,
+        index: avatarIndexOf(profile.nickname),
+        avatarUrl: profile.avatarUrl
+      }
+    }
+  }
+  return {
+    name: message.sender || conversation.name,
+    index: conversation.avatarIndex,
+    avatarUrl: conversation.avatarUrl ?? null
+  }
+}
+
+const headerSubtitle = computed(() => {
+  const conversation = active.value
+  if (!conversation) return ''
+  if (store.isTyping(conversation.id)) return '对方正在输入…'
+  if (conversation.targetType === 'BOT') {
+    return conversation.bot?.description || '机器人'
+  }
+  if (conversation.group) return `${conversation.members?.length ?? 0} 位成员`
+  if (conversation.muted) return '消息免打扰'
+  return conversation.targetSignature || '在线'
+})
 
 function selectConversation(id: string): void {
   store.setActive(id)
@@ -75,10 +131,18 @@ function openFloat(): void {
   showFloat.value = true
 }
 
-function openProfileChat(): void {
+async function openProfileChat(): Promise<void> {
   showProfile.value = false
-  store.ensureConversation(profile.value.name, profile.value.index)
-  void router.push('/chats')
+  if (!profile.value.userId) {
+    showToast('缺少用户信息')
+    return
+  }
+  try {
+    await store.openWithUser(profile.value.userId)
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
 }
 
 function expandFloat(id: string): void {
@@ -102,8 +166,13 @@ function forwardRecent(): void {
 }
 
 function openFileDialog(): void {
-  showToast('已使用系统默认应用打开文件')
   showFile.value = false
+  if (!fileFallback.value.url) {
+    showToast('该文件没有可用的下载地址')
+    return
+  }
+  window.open(fileFallback.value.url, '_blank')
+  showToast('已打开文件')
 }
 
 function forwardFileDialog(): void {
@@ -121,14 +190,36 @@ function onScheduleConfirm(value: string): void {
   showSchedule.value = false
 }
 
-function profileAddFriend(): void {
+async function profileAddFriend(): Promise<void> {
   showProfile.value = false
-  showToast('已发送好友申请')
+  const userId = active.value?.targetUserId
+  if (!app.accessToken || !userId) return
+  try {
+    await sendFriendRequest(app.accessToken, {
+      toUserId: userId,
+      message: '你好，申请添加你为好友'
+    })
+    showToast('已发送好友申请')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '好友申请发送失败')
+  }
 }
 
 function profileQr(): void {
   showProfile.value = false
   showQr.value = true
+}
+
+async function profileBlock(): Promise<void> {
+  showProfile.value = false
+  const userId = active.value?.targetUserId
+  if (!app.accessToken || !userId) return
+  try {
+    await blockUser(app.accessToken, userId)
+    showToast('已拉黑该用户，单聊将无法继续')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '拉黑失败')
+  }
 }
 
 function openSearchFromPanel(): void {
@@ -177,6 +268,13 @@ async function scrollToBottom(): Promise<void> {
   if (el) el.scrollTop = el.scrollHeight
 }
 
+function onScrollHistory(): void {
+  const el = scrollArea.value
+  const conversation = active.value
+  if (!el || !conversation?.hasMore) return
+  if (el.scrollTop < 48) void store.loadMoreHistory(conversation.id)
+}
+
 watch(() => active.value?.id, scrollToBottom)
 watch(() => active.value?.messages.length, scrollToBottom)
 
@@ -196,15 +294,21 @@ watch(
 
 const replyTo = ref<{ sender: string; text: string } | null>(null)
 
-function onSend(text: string): void {
-  const conversationId = active.value?.id
-  store.sendMessage(text, replyTo.value?.text)
+async function onSend(text: string): Promise<void> {
+  if (!active.value) return
+  const quoted = replyTo.value
   replyTo.value = null
-  void scrollToBottom()
-  window.setTimeout(() => {
-    store.simulateReply(conversationId)
-    void scrollToBottom()
-  }, 900)
+  const payload = quoted ? `回复 ${quoted.sender}：${quoted.text}\n${text}` : text
+  try {
+    await store.sendMessage(payload)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '消息发送失败')
+  }
+}
+
+function onTyping(): void {
+  if (active.value) store.sendTyping(active.value.id)
 }
 
 function onHeaderSearch(): void {
@@ -212,9 +316,9 @@ function onHeaderSearch(): void {
   void router.push({ path: '/search', query: { conversation: active.value.id } })
 }
 
-function onHeaderPin(): void {
+async function onHeaderPin(): Promise<void> {
   if (!active.value) return
-  const pinned = store.togglePin(active.value.id)
+  const pinned = await store.togglePin(active.value.id)
   showToast(pinned ? '已置顶会话' : '已取消置顶')
 }
 
@@ -269,8 +373,9 @@ function onConvMenuSelect(key: string): void {
       showPinConfirm.value = true
       break
     case 'mute': {
-      const muted = store.toggleMute(conv.id)
-      showToast(muted ? '已开启消息免打扰' : '已关闭消息免打扰')
+      void store.toggleMute(conv.id).then((muted) => {
+        showToast(muted ? '已开启消息免打扰' : '已关闭消息免打扰')
+      })
       break
     }
     case 'read':
@@ -294,19 +399,19 @@ function onConvMenuSelect(key: string): void {
   }
 }
 
-function confirmPin(): void {
+async function confirmPin(): Promise<void> {
   const conv = pendingConv.value
   showPinConfirm.value = false
   if (!conv) return
-  const pinned = store.togglePin(conv.id)
+  const pinned = await store.togglePin(conv.id)
   showToast(pinned ? '已置顶会话' : '已取消置顶')
 }
 
-function confirmDelete(): void {
+async function confirmDelete(): Promise<void> {
   const conv = pendingConv.value
   showDelete.value = false
   if (!conv) return
-  store.deleteConversation(conv.id)
+  await store.deleteConversation(conv.id)
   showToast('会话已删除')
 }
 
@@ -413,10 +518,14 @@ function openPreview(message: ChatMessage): void {
 /* ─────────── 文件详情 ─────────── */
 
 const showFile = ref(false)
-const fileFallback = ref({ name: '', size: '' })
+const fileFallback = ref({ name: '', size: '', url: '' })
 
 function openFile(message: ChatMessage): void {
-  fileFallback.value = { name: message.fileName ?? '文件', size: message.fileSize ?? '' }
+  fileFallback.value = {
+    name: message.fileName ?? '文件',
+    size: message.fileSize ?? '',
+    url: message.fileUrl ?? ''
+  }
   showFile.value = true
 }
 
@@ -440,14 +549,26 @@ const showProfile = ref(false)
 const showClear = ref(false)
 const showForwardDetail = ref(false)
 const forwardDetail = ref<ChatMessage | null>(null)
-const profile = ref({ name: '林晓', desc: '产品经理', index: 1 })
+const profile = ref({ name: '林晓', desc: '产品经理', index: 1, userId: '' })
 
 function onInfoProfile(): void {
   const member = active.value?.members?.[0]
+  if (active.value?.bot) {
+    profile.value = {
+      name: active.value.bot.nickname,
+      desc: active.value.bot.description || '机器人',
+      index: active.value.avatarIndex,
+      userId: active.value.bot.botId
+    }
+    showProfile.value = false
+    showToast('机器人资料由开发者后台维护')
+    return
+  }
   profile.value = {
-    name: member?.name ?? active.value?.name ?? '林晓',
-    desc: member?.role ?? '在线',
-    index: member?.index ?? 1
+    name: active.value?.name ?? (member?.name || '林晓'),
+    desc: member?.role ?? active.value?.targetSignature ?? '在线',
+    index: member?.index ?? active.value?.avatarIndex ?? 1,
+    userId: active.value?.targetUserId ?? ''
   }
   showProfile.value = true
 }
@@ -457,8 +578,9 @@ const showSelfQr = computed(() => showQr.value && !active.value?.group)
 
 function onToggleMute(): void {
   if (!active.value) return
-  const muted = store.toggleMute(active.value.id)
-  showToast(muted ? '已开启消息免打扰' : '已关闭消息免打扰')
+  void store.toggleMute(active.value.id).then((muted) => {
+    showToast(muted ? '已开启消息免打扰' : '已关闭消息免打扰')
+  })
 }
 
 function onMessageInputAction(key: string): void {
@@ -485,34 +607,56 @@ function onMessageInputAction(key: string): void {
   }
 }
 
-function sendFile(payload: { name: string; size: string }): void {
+async function sendFile(payload: { name: string; size: string; file: File }): Promise<void> {
   if (!active.value) return
-  store.sendFile(active.value.id, payload.name, payload.size)
-  void scrollToBottom()
+  try {
+    await store.sendFileAttachment(active.value.id, payload.file)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '文件上传失败')
+  }
 }
 
-function sendImage(payload: { name: string }): void {
+async function sendImage(payload: { name: string; file: File }): Promise<void> {
   if (!active.value) return
-  store.sendImage(active.value.id, payload.name, 3)
-  void scrollToBottom()
+  try {
+    await store.sendImageFile(active.value.id, payload.file)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '图片上传失败')
+  }
 }
 
-function sendAudio(payload: { duration: string }): void {
+async function sendAudio(payload: { duration: string; blob?: Blob }): Promise<void> {
   if (!active.value) return
-  store.sendAudio(active.value.id, payload.duration)
-  void scrollToBottom()
+  if (!payload.blob) {
+    showToast('未录制到音频，请检查麦克风权限')
+    return
+  }
+  const [minutes, seconds] = payload.duration.split(':').map((value) => Number(value))
+  try {
+    await store.sendAudioBlob(active.value.id, payload.blob, minutes * 60 + seconds)
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '语音发送失败')
+  }
 }
 
 function sendPoll(): void {
   if (!active.value) return
   store.sendPoll(active.value.id, '本周评审时间投票')
+  showToast('投票能力后端暂未开放，当前为本地演示')
   void scrollToBottom()
 }
 
-function sendCard(): void {
+async function sendCard(): Promise<void> {
   if (!active.value) return
-  store.sendCard(active.value.id, '林晓', '产品经理')
-  void scrollToBottom()
+  try {
+    await store.sendCard(active.value.id, '林晓', '产品经理')
+    await scrollToBottom()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '名片发送失败')
+  }
 }
 
 function onVote(message: ChatMessage, index: number): void {
@@ -528,29 +672,50 @@ function onForwardDetail(message: ChatMessage): void {
 }
 
 /* 加号菜单（P15-13） */
-function onStartChat(payload: { name: string; index: number }): void {
-  store.ensureConversation(payload.name, payload.index)
-  void router.push('/chats')
-  showToast(`已打开与 ${payload.name} 的会话`)
-}
-
-function onCreateGroup(payload: {
+async function onStartChat(payload: {
+  userId: string
   name: string
-  members: { name: string; index: number }[]
-}): void {
-  store.createGroup(
-    payload.name,
-    payload.members.map((member) => ({ ...member, role: '成员' as const }))
-  )
-  void router.push('/chats')
-  showToast('群聊已创建')
+  index: number
+}): Promise<void> {
+  if (!payload.userId) {
+    showToast('缺少用户 ID')
+    return
+  }
+  try {
+    await store.openWithUser(payload.userId)
+    void router.push('/chats')
+    showToast(`已打开与 ${payload.name} 的会话`)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '打开会话失败')
+  }
 }
 
-function leaveGroup(): void {
+async function onCreateGroup(payload: {
+  name: string
+  members: { userId: string; name: string; index: number }[]
+}): Promise<void> {
+  const memberIds = payload.members.map((member) => member.userId).filter(Boolean)
+  if (memberIds.length === 0) {
+    showToast('请至少选择一位成员')
+    return
+  }
+  try {
+    await store.createGroup(payload.name, memberIds)
+    void router.push('/chats')
+    showToast('群聊已创建')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '创建群聊失败')
+  }
+}
+
+async function leaveGroup(): Promise<void> {
   if (!active.value) return
   const id = active.value.id
   showManage.value = false
-  store.deleteConversation(id)
+  if (app.accessToken && id.startsWith('group:')) {
+    await leaveGroupApi(app.accessToken, id.replace(/^group:/, '')).catch(() => undefined)
+  }
+  await store.deleteConversation(id)
   showToast('已退出群聊')
 }
 </script>
@@ -598,13 +763,7 @@ function leaveGroup(): void {
     <section v-if="active" class="flex h-full min-w-0 flex-1 flex-col bg-tertiary">
       <ChatHeader
         :title="active.name"
-        :subtitle="
-          active.group
-            ? `${active.members?.length ?? 0} 位成员`
-            : active.muted
-              ? '消息免打扰'
-              : '在线'
-        "
+        :subtitle="headerSubtitle"
         :pinned="active.pinned"
         @search="onHeaderSearch"
         @pin="onHeaderPin"
@@ -614,6 +773,7 @@ function leaveGroup(): void {
       <div
         ref="scrollArea"
         class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
+        @scroll.passive="onScrollHistory"
       >
         <div
           v-for="(message, index) in active.messages"
@@ -632,6 +792,8 @@ function leaveGroup(): void {
           <MessageBubble
             :message="message"
             :highlight="message.id === highlightId"
+            :self-avatar="selfAvatar"
+            :sender-avatar="senderAvatarOf(message)"
             @contextmenu="onMessageContextMenu($event, message)"
             @preview="openPreview"
             @open-file="openFile"
@@ -652,6 +814,7 @@ function leaveGroup(): void {
         :title="active.name"
         :reply-to="replyTo"
         @send="onSend"
+        @typing="onTyping"
         @toast="showToast"
         @clear-reply="replyTo = null"
         @send-file="sendFile"
@@ -822,11 +985,13 @@ function leaveGroup(): void {
       :name="profile.name"
       :desc="profile.desc"
       :avatar-index="profile.index"
-      account-id="linxiao"
+      :avatar-url="active?.avatarUrl"
+      :account-id="active?.targetUsername ?? active?.targetUserId ?? ''"
       @close="showProfile = false"
       @start-chat="openProfileChat"
       @add-friend="profileAddFriend"
       @qr="profileQr"
+      @block="profileBlock"
     />
 
     <!-- P24 会话浮窗 -->

@@ -19,6 +19,9 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl()
 
+/** 后端根地址（不带 /api/v1），用于拼接文件内容等绝对 URL */
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+
 const TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT ?? DEFAULT_TIMEOUT) || DEFAULT_TIMEOUT
 
 /** 与 docs/api/error-codes.md 对齐的默认文案 */
@@ -60,6 +63,15 @@ export interface RequestOptions {
   body?: unknown
   token?: string
   timeout?: number
+}
+
+type TokenRefresher = () => Promise<string | null>
+
+let tokenRefresher: TokenRefresher | null = null
+
+/** 由 app store 注册；401 时尝试刷新一次并重放请求 */
+export function setTokenRefresher(refresher: TokenRefresher | null): void {
+  tokenRefresher = refresher
 }
 
 interface ProxyResponse {
@@ -141,6 +153,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (result.status === 401) {
+    if (tokenRefresher && options.token) {
+      const nextToken = await tokenRefresher()
+      if (nextToken) {
+        return apiRequest<T>(path, { ...options, token: nextToken })
+      }
+    }
     const code = envelope?.code ?? 10100
     throw new ApiError(code, envelope?.message || ERROR_MESSAGES[10100])
   }
