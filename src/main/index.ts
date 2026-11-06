@@ -9,6 +9,8 @@ const LOGIN_HEIGHT = 548
 
 let loginWindow: BrowserWindow | null = null
 let mainWindow: BrowserWindow | null = null
+/** 独立会话窗口：conversationId -> BrowserWindow */
+const popoutWindows = new Map<string, BrowserWindow>()
 
 const preloadScript = join(__dirname, '../preload/index.js')
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
@@ -99,6 +101,39 @@ function createMainWindow(): void {
   attachExternalLinks(mainWindow)
 
   loadRoute(mainWindow, '/chats')
+}
+
+/** 为单个会话打开独立窗口，重复打开会聚焦已有窗口 */
+function createPopoutWindow(conversationId: string): void {
+  const id = conversationId?.trim()
+  if (!id || !/^[a-zA-Z0-9:_-]{1,64}$/.test(id)) return
+
+  const existed = popoutWindows.get(id)
+  if (existed && !existed.isDestroyed()) {
+    existed.show()
+    existed.focus()
+    return
+  }
+
+  const window = new BrowserWindow({
+    width: 840,
+    height: 600,
+    minWidth: 520,
+    minHeight: 400,
+    show: false,
+    autoHideMenuBar: true,
+    ...(process.platform === 'linux' ? { icon } : {}),
+    webPreferences: {
+      preload: preloadScript,
+      sandbox: false
+    }
+  })
+
+  popoutWindows.set(id, window)
+  window.once('ready-to-show', () => window.show())
+  window.on('closed', () => popoutWindows.delete(id))
+  attachExternalLinks(window)
+  loadRoute(window, `/popout/${id}`)
 }
 
 function registerIpc(): void {
@@ -207,10 +242,18 @@ function registerIpc(): void {
     if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close()
   })
 
-  // 退出登录：先创建登录窗口，再关闭主窗口
+  // 退出登录：先创建登录窗口，再关闭主窗口和所有独立会话窗口
   ipcMain.on('auth:logout', () => {
     createLoginWindow()
+    for (const window of popoutWindows.values()) {
+      if (!window.isDestroyed()) window.close()
+    }
+    popoutWindows.clear()
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close()
+  })
+
+  ipcMain.on('window:open-popout', (_event, conversationId: string) => {
+    createPopoutWindow(conversationId)
   })
 
   ipcMain.on('window:minimize', (event) => {

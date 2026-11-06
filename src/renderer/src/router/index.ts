@@ -60,13 +60,14 @@ const router = createRouter({
           path: 'search',
           name: 'search',
           component: () => import('@renderer/views/SearchView.vue')
-        },
-        {
-          path: 'history',
-          name: 'history',
-          component: () => import('@renderer/views/HistoryView.vue')
         }
       ]
+    },
+    {
+      // 消息历史是当前会话的独立视图，不挂载主应用侧栏
+      path: '/history',
+      name: 'history',
+      component: () => import('@renderer/views/HistoryView.vue')
     },
     {
       path: '/settings',

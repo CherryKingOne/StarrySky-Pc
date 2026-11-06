@@ -58,6 +58,13 @@ export function markConversationRead(token: string, conversationId: string): Pro
   })
 }
 
+export function markConversationUnread(token: string, conversationId: string): Promise<null> {
+  return apiRequest<null>(`/conversations/unread${buildQuery({ conversationId })}`, {
+    method: 'POST',
+    token
+  })
+}
+
 export function getUnreadSummary(token: string): Promise<{ totalUnread: number }> {
   return apiRequest<{ totalUnread: number }>('/conversations/unread', { token })
 }

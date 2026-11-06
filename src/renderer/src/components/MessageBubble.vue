@@ -104,7 +104,7 @@ function playAudio(): void {
       :name="incomingAvatar.name"
       :index="incomingAvatar.index ?? avatarIndexOf(incomingAvatar.name)"
       :avatar-url="incomingAvatar.avatarUrl"
-      :rounded="false"
+      :rounded="true"
       :size="32"
     />
 
@@ -283,7 +283,7 @@ function playAudio(): void {
       :name="outgoingAvatar.name"
       :index="outgoingAvatar.index ?? avatarIndexOf(outgoingAvatar.name)"
       :avatar-url="outgoingAvatar.avatarUrl"
-      :rounded="false"
+      :rounded="true"
       :size="32"
     />
   </div>

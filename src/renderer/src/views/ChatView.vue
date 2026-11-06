@@ -18,18 +18,18 @@ import InfoPanel from '@renderer/components/InfoPanel.vue'
 import MediaPreview from '@renderer/components/MediaPreview.vue'
 import MessageBubble from '@renderer/components/MessageBubble.vue'
 import MessageInput from '@renderer/components/MessageInput.vue'
-import OptionPickerDialog from '@renderer/components/OptionPickerDialog.vue'
 import ForwardDetailDialog from '@renderer/components/ForwardDetailDialog.vue'
 import SearchBar from '@renderer/components/SearchBar.vue'
 import StatsDialog from '@renderer/components/StatsDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
 import UserCardModal from '@renderer/components/UserCardModal.vue'
 import { useAppStore } from '@renderer/stores/app'
-import { useConversationsStore, type ConversationFilter } from '@renderer/stores/conversations'
+import { useConversationsStore } from '@renderer/stores/conversations'
 import { leaveGroup as leaveGroupApi } from '@renderer/api/groups'
 import { sendFriendRequest } from '@renderer/api/friends'
 import { blockUser } from '@renderer/api/blocks'
-import { avatarIndexOf } from '@renderer/utils/chat'
+import { avatarIndexOf, shouldShowMessageTime } from '@renderer/utils/chat'
+import { openPopoutWindow } from '@renderer/utils/window'
 import type { CallMode, ChatMessage, Conversation } from '@renderer/types'
 
 const store = useConversationsStore()
@@ -50,7 +50,6 @@ function showToast(message: string): void {
 }
 
 const active = computed(() => store.activeConversation)
-const totalUnread = computed(() => store.totalUnread)
 const highlightId = computed(() => store.highlightId)
 const selfAvatar = computed(() => ({
   name: app.nickname || '我',
@@ -125,7 +124,7 @@ function openHistory(): void {
 
 function openPopout(): void {
   if (!active.value) return
-  void router.push(`/popout/${active.value.id}`)
+  openPopoutWindow(active.value.id)
 }
 
 function openFloat(): void {
@@ -150,7 +149,7 @@ async function openProfileChat(): Promise<void> {
 
 function expandFloat(id: string): void {
   showFloat.value = false
-  void router.push(`/popout/${id}`)
+  openPopoutWindow(id)
 }
 
 function clearChat(): void {
@@ -227,30 +226,6 @@ async function profileBlock(): Promise<void> {
 
 function openSearchFromPanel(): void {
   onHeaderSearch()
-}
-
-/** 会话分类筛选（P15-08 选项选择） */
-const showFilter = ref(false)
-const filterOptions = ['全部会话', '未读会话', '群聊', '频道']
-const filterLabel = computed(() => {
-  const map: Record<ConversationFilter, string> = {
-    all: '全部会话',
-    unread: '未读会话',
-    group: '群聊',
-    channel: '频道'
-  }
-  return map[store.filter]
-})
-
-function onFilterConfirm(value: string): void {
-  const map: Record<string, ConversationFilter> = {
-    全部会话: 'all',
-    未读会话: 'unread',
-    群聊: 'group',
-    频道: 'channel'
-  }
-  store.setFilter(map[value] ?? 'all')
-  showToast(`已切换到「${value}」`)
 }
 
 const filtered = computed(() => {
@@ -335,20 +310,23 @@ const activeConvMenu = ref<Conversation | null>(null)
 const conversationMenuItems = computed<MenuItem[]>(() => {
   const conv = activeConvMenu.value
   const isPinned = conv?.pinned ?? false
+  const hasUnread = (conv?.unread ?? 0) > 0
   return [
     { key: 'pin', label: isPinned ? '取消置顶' : '置顶会话', icon: 'ion:pin' },
     {
-      key: 'mute',
-      label: conv?.muted ? '关闭免打扰' : '消息免打扰',
-      icon: 'ion:ios-notifications-off'
+      key: 'read-toggle',
+      label: hasUnread ? '标记为已读' : '标为未读',
+      icon: hasUnread ? 'ion:ios-checkmark' : 'ion:mail-unread'
     },
-    { key: 'read', label: '标记为已读', icon: 'ion:ios-checkmark' },
-    { key: 'filter', label: '会话分类', icon: 'ion:funnel' },
+    {
+      key: 'mute',
+      label: conv?.muted ? '允许消息通知' : '消息免打扰',
+      icon: conv?.muted ? 'ion:ios-notifications' : 'ion:ios-notifications-off'
+    },
+    { key: 'popout', label: '独立显示窗口', icon: 'ion:ios-open' },
     { key: 'sep1', label: '', separator: true },
-    { key: 'popout', label: '独立窗口打开', icon: 'ion:ios-open' },
-    { key: 'float', label: '会话浮窗', icon: 'ion:copy' },
-    { key: 'sep2', label: '', separator: true },
-    { key: 'delete', label: '删除会话', icon: 'ion:ios-trash', danger: true }
+    { key: 'hide', label: '不显示', icon: 'ion:eye-off' },
+    { key: 'delete', label: '删除聊天', icon: 'ion:ios-trash', danger: true }
   ]
 })
 
@@ -381,25 +359,66 @@ function onConvMenuSelect(key: string): void {
       })
       break
     }
-    case 'read':
-      store.markRead(conv.id)
-      showToast('已标记为已读')
-      break
-    case 'filter':
-      showFilter.value = true
+    case 'read-toggle':
+      if (conv.unread > 0) {
+        void store.markRead(conv.id)
+        showToast('已标记为已读')
+      } else {
+        void store.markUnread(conv.id)
+        showToast('已标为未读')
+      }
       break
     case 'popout':
-      void router.push(`/popout/${conv.id}`)
+      openPopoutWindow(conv.id)
       break
-    case 'float':
-      floatConversationId.value = conv.id
-      showFloat.value = true
+    case 'hide':
+      askHideConversation(conv)
       break
     case 'delete':
       pendingConv.value = conv
       showDelete.value = true
       break
   }
+}
+
+const showHide = ref(false)
+const HIDE_TIP_KEY = 'starrysky-hide-chat-tip-at'
+
+/** 微信规则：首次隐藏时提醒，之后 30 天内不再提醒 */
+function shouldShowHideTip(): boolean {
+  try {
+    const last = Number(localStorage.getItem(HIDE_TIP_KEY) ?? 0)
+    return !last || Date.now() - last > 30 * 24 * 60 * 60 * 1000
+  } catch {
+    return true
+  }
+}
+
+function markHideTipShown(): void {
+  try {
+    localStorage.setItem(HIDE_TIP_KEY, String(Date.now()))
+  } catch {
+    /* 忽略持久化失败 */
+  }
+}
+
+function askHideConversation(conv: Conversation): void {
+  if (shouldShowHideTip()) {
+    pendingConv.value = conv
+    showHide.value = true
+    return
+  }
+  store.hideConversation(conv.id)
+  showToast('已不显示该聊天')
+}
+
+function confirmHide(): void {
+  const conv = pendingConv.value
+  showHide.value = false
+  markHideTipShown()
+  if (!conv) return
+  store.hideConversation(conv.id)
+  showToast('已不显示该聊天')
 }
 
 async function confirmPin(): Promise<void> {
@@ -415,7 +434,7 @@ async function confirmDelete(): Promise<void> {
   showDelete.value = false
   if (!conv) return
   await store.deleteConversation(conv.id)
-  showToast('会话已删除')
+  showToast('聊天已删除')
 }
 
 /* ─────────── P15-11 消息右键菜单 ─────────── */
@@ -741,18 +760,6 @@ async function leaveGroup(): Promise<void> {
     >
       <SearchBar v-model="keyword" @add="addActions?.open($event)" />
 
-      <div class="flex h-7 shrink-0 items-center justify-between px-3">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1 rounded-sm px-1 text-micro text-secondary-foreground transition-colors hover:text-foreground"
-          @click="showFilter = true"
-        >
-          {{ filterLabel }}
-          <AppIcon name="ion:chevron-down" :size="10" />
-        </button>
-        <span class="text-micro text-tertiary-foreground">{{ totalUnread }} 条未读</span>
-      </div>
-
       <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <ConversationItem
           v-for="conversation in filtered"
@@ -761,6 +768,7 @@ async function leaveGroup(): Promise<void> {
           :active="conversation.id === active?.id"
           class="cursor-pointer"
           @click="selectConversation(conversation.id)"
+          @dblclick="openPopoutWindow(conversation.id)"
           @contextmenu="onConversationContextMenu"
         />
         <p
@@ -785,7 +793,7 @@ async function leaveGroup(): Promise<void> {
 
       <div
         ref="scrollArea"
-        class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
+        class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-3"
         @scroll.passive="onScrollHistory"
       >
         <div
@@ -794,10 +802,7 @@ async function leaveGroup(): Promise<void> {
           :data-message-id="message.id"
         >
           <div
-            v-if="
-              index === 0 ||
-              formatTime(active.messages[index - 1].time) !== formatTime(message.time)
-            "
+            v-if="shouldShowMessageTime(message, active.messages[index - 1])"
             class="py-2 text-center text-micro text-time-foreground"
           >
             {{ formatTime(message.time) }}
@@ -983,16 +988,6 @@ async function leaveGroup(): Promise<void> {
       @confirm="onScheduleConfirm"
     />
 
-    <!-- P15-08 选项选择 -->
-    <OptionPickerDialog
-      :visible="showFilter"
-      title="选择会话分类"
-      :options="filterOptions"
-      :model-value="filterLabel"
-      @close="showFilter = false"
-      @confirm="onFilterConfirm"
-    />
-
     <!-- P15-01 用户卡片 -->
     <UserCardModal
       :visible="showProfile"
@@ -1018,11 +1013,19 @@ async function leaveGroup(): Promise<void> {
 
     <!-- 确认弹窗 -->
     <ConfirmDialog
+      :visible="showHide"
+      title="不显示聊天"
+      description="该聊天将从会话列表中隐藏，聊天记录仍会保留。对方发来新消息时会重新显示。"
+      confirm-text="我知道"
+      @cancel="showHide = false"
+      @confirm="confirmHide"
+    />
+    <ConfirmDialog
       :visible="showDelete"
-      title="删除会话"
+      title="删除聊天"
       :description="
         pendingConv
-          ? `确定要删除「${pendingConv.name}」吗？删除后聊天记录将一并清除，且无法恢复。`
+          ? `确定要删除「${pendingConv.name}」吗？删除后会话会从列表移除，对方发来新消息时会重新显示。`
           : ''
       "
       confirm-text="删除"

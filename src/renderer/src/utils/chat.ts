@@ -116,8 +116,26 @@ export function mapConversation(item: ConversationItem): Conversation {
     loaded: false,
     hasMore: false,
     lastMessageId: item.lastMessageId,
-    lastMessageAt: item.lastMessageAt
+    lastMessageAt: item.lastMessageAt,
+    createdAt: item.createdAt
   }
+}
+
+/** 消息时间分隔阈值：5 分钟（对齐微信） */
+export const MESSAGE_TIME_GAP_MS = 5 * 60 * 1000
+
+/**
+ * 是否需要在该消息上方显示时间：
+ * 首条消息、与上一条间隔超过 5 分钟、或缺少原始时间时按分钟变化降级判断。
+ */
+export function shouldShowMessageTime(message: ChatMessage, previous?: ChatMessage): boolean {
+  if (!previous) return true
+  const current = parseDate(message.createdAt)
+  const previousDate = parseDate(previous.createdAt)
+  if (current && previousDate) {
+    return current.getTime() - previousDate.getTime() >= MESSAGE_TIME_GAP_MS
+  }
+  return message.time !== previous.time
 }
 
 export interface MessageMapContext {
@@ -133,6 +151,7 @@ export function mapMessage(item: MessageItem, context: MessageMapContext): ChatM
     direction,
     kind: 'text',
     time: formatMessageTime(item.createdAt),
+    createdAt: item.createdAt,
     senderId: item.senderId,
     sender: direction === 'in' ? context.senderName(item.senderId) : undefined,
     status: 'sent',

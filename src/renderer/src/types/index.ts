@@ -15,6 +15,8 @@ export interface ChatMessage {
   sender?: string
   senderId?: string
   time: string
+  /** 服务端原始时间，用于计算 5 分钟时间分隔 */
+  createdAt?: string
   text?: string
   quoted?: string
   quotedSender?: string
@@ -83,6 +85,8 @@ export interface Conversation {
   hasMore?: boolean
   lastMessageId?: string | null
   lastMessageAt?: string | null
+  /** 会话创建时间（单聊约等于加好友时间，群聊为建群时间） */
+  createdAt?: string
 }
 
 export interface ContactEntry {
@@ -98,6 +102,8 @@ export interface ContactEntry {
   department?: string
   remark?: string
   username?: string
+  /** 加为好友的时间 */
+  createdAt?: string
 }
 
 export interface FavoriteEntry {
@@ -151,6 +157,8 @@ export interface GroupEntry {
   notice: string
   conversationId: string
   myRole?: number
+  /** 建群时间 */
+  createdAt?: string
 }
 
 export interface FriendRequest {

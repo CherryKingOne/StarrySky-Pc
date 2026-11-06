@@ -14,7 +14,8 @@ import StatsDialog from '@renderer/components/StatsDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { useAppStore } from '@renderer/stores/app'
 import { useConversationsStore } from '@renderer/stores/conversations'
-import { avatarIndexOf } from '@renderer/utils/chat'
+import { avatarIndexOf, shouldShowMessageTime } from '@renderer/utils/chat'
+import { hasElectron, isPopoutWindow, sendWindowAction } from '@renderer/utils/window'
 import type { CallMode, ChatMessage } from '@renderer/types'
 
 const route = useRoute()
@@ -77,12 +78,25 @@ const images = computed(
   () => conversation.value?.messages.filter((message) => message.kind === 'image') ?? []
 )
 
-onMounted(() => {
+function backToMain(): void {
+  if (isPopoutWindow() && hasElectron()) {
+    sendWindowAction('window:close')
+    return
+  }
+  void router.push('/chats')
+}
+
+onMounted(async () => {
+  await store.load().catch(() => undefined)
   if (!conversation.value) {
+    if (isPopoutWindow() && hasElectron()) {
+      sendWindowAction('window:close')
+      return
+    }
     void router.replace('/chats')
     return
   }
-  store.setActive(id)
+  await store.setActive(id)
   void scrollToBottom()
 })
 
@@ -131,7 +145,8 @@ function onVote(message: ChatMessage, index: number): void {
 function onAction(key: string): void {
   switch (key) {
     case 'history':
-      void router.push({ path: '/history', query: { conversation: id } })
+      // popout=1：历史页保留主应用侧栏，返回时回到当前独立会话窗口
+      void router.push({ path: '/history', query: { conversation: id, popout: '1' } })
       break
     case 'files':
       void router.push('/files')
@@ -232,7 +247,7 @@ function locateContext(conversationId: string): void {
         v-tooltip="'返回主窗口'"
         type="button"
         class="icon-button h-8 w-8 rounded-md"
-        @click="router.push('/chats')"
+        @click="backToMain"
       >
         <AppIcon name="ion:ios-arrow-left" :size="20" />
       </button>
@@ -268,21 +283,27 @@ function locateContext(conversationId: string): void {
     </header>
 
     <div ref="scrollArea" class="min-h-0 flex-1 overflow-y-auto px-6 py-3">
-      <MessageBubble
-        v-for="message in conversation.messages"
-        :key="message.id"
-        :message="message"
-        :highlight="message.id === store.highlightId"
-        :self-avatar="selfAvatar"
-        :sender-avatar="senderAvatarOf(message)"
-        @preview="openPreview"
-        @open-file="showToast(`打开文件：${$event.fileName}`)"
-        @open-forward="showForward = true"
-        @open-card="showToast(`查看名片：${$event.cardTitle}`)"
-        @vote="onVote(message, $event)"
-        @play-audio="showToast('正在播放语音…')"
-        @contextmenu="replyToMessage(message)"
-      />
+      <div v-for="(message, index) in conversation.messages" :key="message.id">
+        <div
+          v-if="shouldShowMessageTime(message, conversation.messages[index - 1])"
+          class="py-2 text-center text-micro text-time-foreground"
+        >
+          {{ message.time }}
+        </div>
+        <MessageBubble
+          :message="message"
+          :highlight="message.id === store.highlightId"
+          :self-avatar="selfAvatar"
+          :sender-avatar="senderAvatarOf(message)"
+          @preview="openPreview"
+          @open-file="showToast(`打开文件：${$event.fileName}`)"
+          @open-forward="showForward = true"
+          @open-card="showToast(`查看名片：${$event.cardTitle}`)"
+          @vote="onVote(message, $event)"
+          @play-audio="showToast('正在播放语音…')"
+          @contextmenu="replyToMessage(message)"
+        />
+      </div>
     </div>
 
     <MessageInput

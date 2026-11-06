@@ -32,11 +32,33 @@ interface SearchResult {
   time: string
 }
 
+const HIDDEN_CONVERSATIONS_KEY = 'starrysky-hidden-conversations'
+
+function readHiddenIds(): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_CONVERSATIONS_KEY)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function writeHiddenIds(ids: string[]): void {
+  try {
+    localStorage.setItem(HIDDEN_CONVERSATIONS_KEY, JSON.stringify(ids))
+  } catch {
+    /* 隐私模式下忽略持久化失败 */
+  }
+}
+
 let localSequence = 1
 function localId(prefix: string): string {
   // 统一使用 local- 前缀，服务端消息到达时才能识别并替换本地乐观消息
   return `local-${prefix}-${Date.now()}-${localSequence++}`
 }
+
+/** 会话列表加载中的共享任务，允许多个窗口等待同一次加载完成 */
+let loadTask: Promise<void> | null = null
 
 function emptyConversation(): Conversation[] {
   return []
@@ -45,6 +67,8 @@ function emptyConversation(): Conversation[] {
 export const useConversationsStore = defineStore('conversations', {
   state: () => ({
     list: emptyConversation(),
+    /** 用户手动「不显示」的会话 ID，持久化在本地 */
+    hiddenIds: readHiddenIds(),
     activeId: '',
     filter: 'all' as ConversationFilter,
     loading: false,
@@ -99,43 +123,55 @@ export const useConversationsStore = defineStore('conversations', {
     }
   },
   actions: {
-    /** 登录后/WS 重连后拉取会话列表 */
+    /** 登录后/WS 重连后拉取会话列表；并发调用会等待同一次加载 */
     async load(force = false): Promise<void> {
       const token = useAppStore().accessToken
       if (!token) return
-      if (this.loading) return
+      if (loadTask) {
+        await loadTask
+        return
+      }
       if (this.loaded && !force) return
       this.loading = true
-      try {
-        const items = await conversationApi.listConversations(token, 100, 0)
-        const previousActive = this.activeId
-        const incoming = items.map(mapConversation)
-        for (const conversation of incoming) {
-          const old = this.list.find((item) => item.id === conversation.id)
-          if (old) {
-            conversation.messages = old.messages
-            conversation.loaded = old.loaded
-            conversation.hasMore = old.hasMore
-            conversation.notice = old.notice
-            conversation.members = old.members
-            conversation.owner = old.owner
+      loadTask = (async () => {
+        try {
+          const items = await conversationApi.listConversations(token, 100, 0)
+          const previousActive = this.activeId
+          const incoming = items
+            .map(mapConversation)
+            .filter((conversation) => !this.hiddenIds.includes(conversation.id))
+          for (const conversation of incoming) {
+            const old = this.list.find((item) => item.id === conversation.id)
+            if (old) {
+              conversation.messages = old.messages
+              conversation.loaded = old.loaded
+              conversation.hasMore = old.hasMore
+              conversation.notice = old.notice
+              conversation.members = old.members
+              conversation.owner = old.owner
+            }
           }
+          this.list = incoming
+          this.loaded = true
+          if (previousActive && incoming.some((item) => item.id === previousActive)) {
+            this.activeId = previousActive
+          } else if (incoming.length > 0) {
+            this.activeId = incoming[0].id
+          } else {
+            this.activeId = ''
+          }
+          if (!this.ownedBotsSynced) {
+            this.ownedBotsSynced = true
+            void this.syncOwnedBots().catch(() => undefined)
+          }
+        } finally {
+          this.loading = false
         }
-        this.list = incoming
-        this.loaded = true
-        if (previousActive && incoming.some((item) => item.id === previousActive)) {
-          this.activeId = previousActive
-        } else if (incoming.length > 0) {
-          this.activeId = incoming[0].id
-        } else {
-          this.activeId = ''
-        }
-        if (!this.ownedBotsSynced) {
-          this.ownedBotsSynced = true
-          void this.syncOwnedBots().catch(() => undefined)
-        }
+      })()
+      try {
+        await loadTask
       } finally {
-        this.loading = false
+        loadTask = null
       }
     },
 
@@ -155,6 +191,7 @@ export const useConversationsStore = defineStore('conversations', {
         if (bot.status !== 'ACTIVE') continue
         try {
           const item = await conversationApi.createBotConversation(token, bot.botId)
+          if (this.hiddenIds.includes(item.conversationId)) continue
           this.upsertConversation(item)
         } catch {
           /* 单个机器人失败不影响其它机器人 */
@@ -182,6 +219,7 @@ export const useConversationsStore = defineStore('conversations', {
       this.typingSentAt = {}
       this.loadingHistory = {}
       this.highlightId = ''
+      this.hiddenIds = readHiddenIds()
     },
 
     /** 选中会话：标记已读并按需拉历史 */
@@ -228,12 +266,65 @@ export const useConversationsStore = defineStore('conversations', {
       await this.loadHistory(id, first?.id)
     },
 
+    /**
+     * 历史消息页专用：翻页拉取指定会话的全部历史，
+     * 以便按日期统计哪些天有消息。单次最多 40 页（约 2000 条）。
+     */
+    async loadAllHistory(id: string, maxPages = 40): Promise<void> {
+      const conversation = this.list.find((item) => item.id === id)
+      if (!conversation) return
+      if (!conversation.loaded) await this.loadHistory(id)
+      let pages = 0
+      while (conversation.hasMore && pages < maxPages) {
+        const first = conversation.messages.find((message) => !message.id.startsWith('local-'))
+        if (!first) break
+        const before = first.id
+        await this.loadHistory(id, before)
+        const nextFirst = conversation.messages.find(
+          (message) => !message.id.startsWith('local-')
+        )
+        if (!nextFirst || nextFirst.id === before) break
+        pages += 1
+      }
+    },
+
     async markRead(id: string): Promise<void> {
       const conversation = this.list.find((item) => item.id === id)
       if (conversation) conversation.unread = 0
       const token = useAppStore().accessToken
       if (!token) return
       await conversationApi.markConversationRead(token, id).catch(() => undefined)
+    },
+
+    /** 标为未读：本地先显示角标，服务端同步 unread_count=1 */
+    async markUnread(id: string): Promise<void> {
+      const conversation = this.list.find((item) => item.id === id)
+      if (!conversation) return
+      const previous = conversation.unread
+      conversation.unread = 1
+      const token = useAppStore().accessToken
+      if (!token) return
+      await conversationApi.markConversationUnread(token, id).catch(() => {
+        conversation.unread = previous
+      })
+    },
+
+    /** 「不显示聊天」：仅从本机会话列表隐藏，保留服务端会话与历史 */
+    hideConversation(id: string): void {
+      if (!this.hiddenIds.includes(id)) {
+        this.hiddenIds.push(id)
+        writeHiddenIds(this.hiddenIds)
+      }
+      const index = this.list.findIndex((item) => item.id === id)
+      if (index >= 0) this.list.splice(index, 1)
+      if (this.activeId === id) this.activeId = this.list[0]?.id ?? ''
+    },
+
+    unhideConversation(id: string): void {
+      const index = this.hiddenIds.indexOf(id)
+      if (index < 0) return
+      this.hiddenIds.splice(index, 1)
+      writeHiddenIds(this.hiddenIds)
     },
 
     markAllRead(): void {
@@ -275,6 +366,7 @@ export const useConversationsStore = defineStore('conversations', {
     },
 
     async deleteConversation(id: string): Promise<void> {
+      this.unhideConversation(id)
       const token = useAppStore().accessToken
       if (token) await conversationApi.deleteConversation(token, id).catch(() => undefined)
       const index = this.list.findIndex((item) => item.id === id)
@@ -318,6 +410,7 @@ export const useConversationsStore = defineStore('conversations', {
     },
 
     upsertConversation(item: Parameters<typeof mapConversation>[0]): Conversation {
+      this.unhideConversation(item.conversationId)
       const mapped = mapConversation(item)
       const existing = this.list.find((conversation) => conversation.id === mapped.id)
       if (existing) {
@@ -652,21 +745,25 @@ export const useConversationsStore = defineStore('conversations', {
       this.highlightId = ''
     },
 
-    /** 绑定 WS 下行事件，返回解绑函数 */
-    bindRealtime(): () => void {
+    /** 绑定 WS 下行事件，forward 用于把事件转发给独立会话窗口，返回解绑函数 */
+    bindRealtime(forward?: (type: string, data: unknown) => void): () => void {
       const offNew = wsClient.on<MessageItem>('message.new', (data) => {
         this.receiveMessage(data)
+        forward?.('message.new', data)
       })
       const offSync = wsClient.on<MessageItem>('message.sync', (data) => {
         this.receiveMessage(data, true)
+        forward?.('message.sync', data)
       })
       const offRecall = wsClient.on<MessageItem>('message.recalled', (data) => {
         this.applyRecall(data)
+        forward?.('message.recalled', data)
       })
       const offTyping = wsClient.on<{ conversationId: string; userId: string }>(
         'typing.received',
         (data) => {
           this.receiveTyping(data.conversationId)
+          forward?.('typing.received', data)
         }
       )
       return () => {
@@ -678,6 +775,8 @@ export const useConversationsStore = defineStore('conversations', {
     },
 
     receiveMessage(item: MessageItem, isSync = false): void {
+      // 隐藏的会话收到新消息后重新显示
+      this.unhideConversation(item.conversationId)
       const conversation = this.list.find((entry) => entry.id === item.conversationId)
       if (!conversation) {
         void this.refresh().then(() => {
@@ -739,6 +838,7 @@ export const useConversationsStore = defineStore('conversations', {
         direction,
         kind: 'notification',
         time: formatMessageTime(item.recalledAt ?? item.createdAt),
+        createdAt: item.recalledAt ?? item.createdAt,
         text: direction === 'out' ? '你撤回了一条消息' : '对方撤回了一条消息',
         recalled: true
       }
@@ -840,11 +940,13 @@ export const useConversationsStore = defineStore('conversations', {
 
     optimisticMessage(contentType: number, content: string): ChatMessage {
       const parsed = parseContentForOptimistic(content)
+      const now = new Date().toISOString()
       const base: ChatMessage = {
         id: localId('m'),
         direction: 'out',
         kind: 'text',
-        time: formatMessageTime(new Date().toISOString()),
+        time: formatMessageTime(now),
+        createdAt: now,
         status: 'sending',
         contentType
       }

@@ -16,11 +16,17 @@ const isSelf = computed(
 
 const emit = defineEmits<{
   contextmenu: [event: MouseEvent, conversation: Conversation]
+  dblclick: [conversation: Conversation]
 }>()
 
 function onContextMenu(event: MouseEvent, conversation: Conversation): void {
   event.preventDefault()
+  event.stopPropagation()
   emit('contextmenu', event, conversation)
+}
+
+function onDoubleClick(conversation: Conversation): void {
+  emit('dblclick', conversation)
 }
 </script>
 
@@ -29,6 +35,7 @@ function onContextMenu(event: MouseEvent, conversation: Conversation): void {
     class="list-row h-item w-panel"
     :class="active ? 'bg-conv-active' : 'hover:bg-item-hover'"
     @contextmenu="onContextMenu($event, conversation)"
+    @dblclick="onDoubleClick(conversation)"
   >
     <Avatar
       :name="conversation.name"

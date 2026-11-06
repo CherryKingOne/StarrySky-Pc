@@ -53,7 +53,8 @@ export const useContactsStore = defineStore('contacts', {
           return {
             ...contact,
             group: contact.name.charAt(0).toUpperCase(),
-            desc: contact.desc || '好友'
+            desc: contact.desc || '好友',
+            createdAt: friend.createdAt
           }
         })
         this.requests = requests.map((request) => {
@@ -83,7 +84,8 @@ export const useContactsStore = defineStore('contacts', {
           owner: group.ownerId,
           notice: '',
           conversationId: `group:${group.groupId}`,
-          myRole: group.myRole
+          myRole: group.myRole,
+          createdAt: group.createdAt
         }))
         this.loaded = true
         void this.refreshPresence()

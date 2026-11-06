@@ -11,6 +11,7 @@ import MessageBubble from '@renderer/components/MessageBubble.vue'
 import MessageInput from '@renderer/components/MessageInput.vue'
 import StatsDialog from '@renderer/components/StatsDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
+import { shouldShowMessageTime } from '@renderer/utils/chat'
 import type { CallMode, ChatMessage, Conversation } from '@renderer/types'
 
 const router = useRouter()
@@ -30,6 +31,7 @@ function build(direction: ChatMessage['direction'], text: string): ChatMessage {
     direction,
     kind: 'text',
     time: now(),
+    createdAt: new Date().toISOString(),
     text
   }
 }
@@ -115,6 +117,7 @@ function sendFile(payload: { name: string; size: string }): void {
     direction: 'out',
     kind: 'file',
     time: now(),
+    createdAt: new Date().toISOString(),
     fileName: payload.name,
     fileSize: payload.size
   })
@@ -128,6 +131,7 @@ function sendImage(payload: { name: string }): void {
     direction: 'out',
     kind: 'image',
     time: now(),
+    createdAt: new Date().toISOString(),
     imageLabel: payload.name,
     imageTone: 2
   })
@@ -141,6 +145,7 @@ function sendAudio(payload: { duration: string }): void {
     direction: 'out',
     kind: 'audio',
     time: now(),
+    createdAt: new Date().toISOString(),
     duration: payload.duration
   })
   showToast('语音已转写并提交给 AI 助手')
@@ -153,6 +158,7 @@ function sendPoll(): void {
     direction: 'out',
     kind: 'poll',
     time: now(),
+    createdAt: new Date().toISOString(),
     text: '本周评审时间投票',
     options: [
       { label: '周五 15:00（设计评审）', votes: 1 },
@@ -169,6 +175,7 @@ function sendCard(): void {
     direction: 'out',
     kind: 'card',
     time: now(),
+    createdAt: new Date().toISOString(),
     cardTitle: '林晓',
     cardSubtitle: '产品经理',
     cardDesc: '个人名片 · 野火科技',
@@ -268,7 +275,7 @@ function onAction(key: string): void {
       <div class="px-[62px]">
         <div v-for="(message, index) in messages" :key="message.id">
           <div
-            v-if="index === 0 || messages[index - 1].time !== message.time"
+            v-if="shouldShowMessageTime(message, messages[index - 1])"
             class="py-2 text-center text-micro text-time-foreground"
           >
             今天 {{ message.time }}
