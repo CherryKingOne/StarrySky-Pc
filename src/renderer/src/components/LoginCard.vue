@@ -7,9 +7,11 @@ import ResetPasswordDialog from '@renderer/components/ResetPasswordDialog.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { useAppStore } from '@renderer/stores/app'
 import type { LoginMode } from '@renderer/stores/app'
-import { hasElectron, sendWindowAction } from '@renderer/utils/window'
+import { hasElectron, isMacPlatform, sendWindowAction } from '@renderer/utils/window'
 
 const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+
+const isMac = isMacPlatform()
 
 const app = useAppStore()
 const router = useRouter()
@@ -164,30 +166,36 @@ function closeWindow(): void {
     class="app-card relative flex h-[500px] w-[380px] flex-col overflow-hidden"
     :class="props.compact ? 'shadow-popover' : ''"
   >
-    <!-- 卡片模式：顶部拖拽区 + 窗口控制 -->
+    <!-- 卡片模式：顶部拖拽区 + 平台窗口控件 -->
     <div
       v-if="props.compact"
-      class="app-drag absolute inset-x-0 top-0 z-20 flex h-8 items-center justify-between px-3"
+      class="app-drag absolute inset-x-0 top-0 z-20 flex h-10 items-center px-3"
+      :class="isMac ? 'justify-start' : 'justify-between'"
     >
-      <span class="text-micro font-medium text-tertiary-foreground">野火IM</span>
-      <div class="flex items-center gap-1">
-        <button
-          v-tooltip="'最小化'"
-          type="button"
-          class="app-no-drag icon-button h-6 w-6 rounded-full text-tertiary-foreground"
-          @click="minimizeWindow"
-        >
-          <AppIcon name="ion:remove" :size="12" />
-        </button>
-        <button
-          v-tooltip="'关闭'"
-          type="button"
-          class="app-no-drag icon-button h-6 w-6 rounded-full text-tertiary-foreground"
-          @click="closeWindow"
-        >
-          <AppIcon name="ion:close" :size="12" />
+      <!-- macOS：左上角仅保留红色关闭圆点 -->
+      <div v-if="isMac" class="traffic-lights app-no-drag flex items-center">
+        <button v-tooltip="'关闭'" type="button" class="mac-dot close" @click="closeWindow">
+          <span>×</span>
         </button>
       </div>
+
+      <!-- Windows / Linux：右上角关闭与最小化 -->
+      <template v-else>
+        <span class="text-micro font-medium text-tertiary-foreground">野火IM</span>
+        <div class="app-no-drag flex items-center gap-1">
+          <button v-tooltip="'最小化'" type="button" class="window-control" @click="minimizeWindow">
+            <AppIcon name="ion:remove" :size="16" />
+          </button>
+          <button
+            v-tooltip="'关闭'"
+            type="button"
+            class="window-control is-close"
+            @click="closeWindow"
+          >
+            <AppIcon name="ion:close" :size="16" />
+          </button>
+        </div>
+      </template>
     </div>
 
     <!-- 扫码登录 -->

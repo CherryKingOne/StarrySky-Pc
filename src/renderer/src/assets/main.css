@@ -304,3 +304,60 @@ html.login-window .app-window.login-shell {
 .app-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* macOS 关闭圆点：左上角仅一个红色按钮，悬停显示 × */
+.traffic-lights .mac-dot {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: filter 0.12s ease;
+}
+
+.traffic-lights .mac-dot span {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.traffic-lights:hover .mac-dot span {
+  opacity: 1;
+}
+
+.traffic-lights .mac-dot.close {
+  background: #ff5f57;
+}
+
+.traffic-lights .mac-dot:hover {
+  filter: brightness(0.94);
+}
+
+/* Windows / Linux 窗口按钮：右上角关闭与最小化 */
+.window-control {
+  display: inline-flex;
+  width: 30px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--icon-secondary);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.window-control:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}
+
+.window-control.is-close:hover {
+  background: var(--text-danger);
+  color: #ffffff;
+}

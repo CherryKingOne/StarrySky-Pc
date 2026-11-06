@@ -67,7 +67,7 @@ function createLoginWindow(): void {
   })
   attachExternalLinks(loginWindow)
 
-  loadRoute(loginWindow, '/login', { loginWindow: '1' })
+  loadRoute(loginWindow, '/login', { loginWindow: '1', platform: process.platform })
 }
 
 /** 主窗口：登录成功后创建，保留系统标题栏 */
