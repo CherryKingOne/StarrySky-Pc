@@ -13,6 +13,7 @@ import SlideVerifyDialog from '@renderer/components/SlideVerifyDialog.vue'
 import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { settingsNavs } from '@renderer/data/mock'
+import { logoutSession } from '@renderer/api/auth'
 import { useAppStore } from '@renderer/stores/app'
 import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
@@ -138,8 +139,9 @@ function lockApp(): void {
   void router.push('/lock')
 }
 
-function logout(): void {
+async function logout(): Promise<void> {
   showLogout.value = false
+  if (app.accessToken) await logoutSession(app.accessToken).catch(() => undefined)
   app.logout()
   if (hasElectron()) {
     sendWindowAction('auth:logout')
@@ -249,8 +251,8 @@ function checkUpdate(): void {
 
           <div class="mt-4 flex flex-col">
             <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">手机号</span>
-              <span class="text-small text-secondary-foreground">{{ phone }}</span>
+              <span class="text-label text-foreground">登录账号</span>
+              <span class="text-small text-secondary-foreground">{{ phone || '未绑定' }}</span>
             </div>
             <div class="flex h-14 items-center justify-between border-b border-divider">
               <span class="text-label text-foreground">登录密码</span>

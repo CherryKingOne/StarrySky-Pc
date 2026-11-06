@@ -11,6 +11,7 @@ import Toast from '@renderer/components/Toast.vue'
 import UserCardModal from '@renderer/components/UserCardModal.vue'
 import { useAppStore } from '@renderer/stores/app'
 import { useConversationsStore } from '@renderer/stores/conversations'
+import { logoutSession } from '@renderer/api/auth'
 import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
 const route = useRoute()
@@ -92,8 +93,9 @@ function onMoreSelect(key: string): void {
   }
 }
 
-function logout(): void {
+async function logout(): Promise<void> {
   showLogout.value = false
+  if (app.accessToken) await logoutSession(app.accessToken).catch(() => undefined)
   app.logout()
   if (hasElectron()) {
     sendWindowAction('auth:logout')

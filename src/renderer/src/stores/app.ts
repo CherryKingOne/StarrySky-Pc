@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
+import type { AuthSession, AuthUser } from '@renderer/api/auth'
 
 export type Theme = 'light' | 'dark'
-export type LoginMode = 'qr' | 'password' | 'captcha' | 'register'
+
+const SESSION_KEY = 'starrysky-session'
+const ACCOUNT_KEY = 'starrysky-account'
+/** 旧版本演示登录标记，读取到会被清理 */
+const LEGACY_AUTH_KEY = 'starrysky-authenticated'
 
 function readStored(key: string): string | null {
   try {
@@ -31,33 +36,65 @@ function readInitialTheme(): Theme {
   return readStored('starrysky-theme') === 'dark' ? 'dark' : 'light'
 }
 
-function readInitialAuth(): boolean {
-  return readStored('starrysky-authenticated') === '1'
+function readSession(): AuthSession | null {
+  const raw = readStored(SESSION_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as AuthSession
+    if (!parsed?.accessToken || !parsed?.user) return null
+    return parsed
+  } catch {
+    return null
+  }
 }
+
+const initialSession = readSession()
+if (!initialSession) removeStored(LEGACY_AUTH_KEY)
 
 export const useAppStore = defineStore('app', {
   state: () => ({
-    authenticated: readInitialAuth(),
+    authenticated: Boolean(initialSession?.accessToken),
+    accessToken: initialSession?.accessToken ?? '',
+    refreshToken: initialSession?.refreshToken ?? '',
+    user: initialSession?.user ?? (null as AuthUser | null),
     theme: readInitialTheme() as Theme,
-    loginMode: 'qr' as LoginMode,
-    qrScanned: false,
     locked: false,
-    nickname: '林晓',
-    accountId: 'linxiao',
-    phone: '138****8888',
+    nickname: initialSession?.user?.nickname || '未登录',
+    accountId: initialSession?.user?.username || '',
+    /** 登录账号（手机号或邮箱），用于设置页展示 */
+    phone: readStored(ACCOUNT_KEY) ?? '',
     avatarIndex: 1,
     language: '简体中文'
   }),
   actions: {
-    login(): void {
+    /** 登录 / 注册成功后写入会话并持久化 */
+    applySession(session: AuthSession, identifier?: string): void {
+      this.accessToken = session.accessToken
+      this.refreshToken = session.refreshToken
+      this.user = session.user
       this.authenticated = true
       this.locked = false
-      writeStored('starrysky-authenticated', '1')
+      this.nickname = session.user.nickname || session.user.username
+      this.accountId = session.user.username
+      if (identifier) {
+        this.phone = identifier
+        writeStored(ACCOUNT_KEY, identifier)
+      }
+      writeStored(SESSION_KEY, JSON.stringify(session))
+      removeStored(LEGACY_AUTH_KEY)
     },
     logout(): void {
       this.authenticated = false
+      this.accessToken = ''
+      this.refreshToken = ''
+      this.user = null
       this.locked = false
-      removeStored('starrysky-authenticated')
+      this.nickname = '未登录'
+      this.accountId = ''
+      this.phone = ''
+      removeStored(SESSION_KEY)
+      removeStored(ACCOUNT_KEY)
+      removeStored(LEGACY_AUTH_KEY)
     },
     lock(): void {
       if (!this.authenticated) return
@@ -67,13 +104,6 @@ export const useAppStore = defineStore('app', {
       if (!password.trim()) return false
       this.locked = false
       return true
-    },
-    setLoginMode(mode: LoginMode): void {
-      this.loginMode = mode
-      this.qrScanned = false
-    },
-    setQrScanned(scanned: boolean): void {
-      this.qrScanned = scanned
     },
     toggleTheme(): void {
       this.theme = this.theme === 'light' ? 'dark' : 'light'

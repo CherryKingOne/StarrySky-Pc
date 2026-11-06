@@ -4,3 +4,8 @@ out
 .DS_Store
 .eslintcache
 *.log*
+
+# 本地环境变量（按 .env.example 复制后修改）
+.env
+.env.local
+.env.*.local

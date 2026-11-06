@@ -104,6 +104,48 @@ function createMainWindow(): void {
 function registerIpc(): void {
   ipcMain.on('ping', () => console.log('pong'))
 
+  // 渲染进程 HTTP 代理：绕过浏览器 CORS，统一在后端请求层处理超时
+  ipcMain.handle(
+    'api:request',
+    async (
+      _event,
+      payload: {
+        url: string
+        method?: string
+        headers?: Record<string, string>
+        body?: unknown
+        timeout?: number
+      }
+    ): Promise<{ ok: boolean; status: number; text: string; error?: string }> => {
+      if (!payload?.url || !/^https?:\/\//i.test(payload.url)) {
+        return { ok: false, status: 0, text: '', error: 'invalid url' }
+      }
+
+      const timeout = Math.min(Math.max(payload.timeout ?? 15000, 1000), 60000)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeout)
+
+      try {
+        const response = await fetch(payload.url, {
+          method: payload.method ?? 'GET',
+          headers: payload.headers,
+          body: payload.body === undefined ? undefined : JSON.stringify(payload.body),
+          signal: controller.signal
+        })
+        return { ok: response.ok, status: response.status, text: await response.text() }
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          text: '',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+  )
+
   // 登录成功：先创建主窗口，再关闭登录卡片，避免中间出现“无窗口”状态
   ipcMain.on('auth:login', () => {
     createMainWindow()
