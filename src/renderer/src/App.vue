@@ -2,6 +2,7 @@
 import { onBeforeUnmount, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { useAppStore } from '@renderer/stores/app'
+import { useAgentsStore } from '@renderer/stores/agents'
 import { useConversationsStore } from '@renderer/stores/conversations'
 import { wsClient } from '@renderer/api/ws'
 import { setTokenRefresher } from '@renderer/api/http'
@@ -10,6 +11,7 @@ import { isLoginWindow, isPopoutWindow } from '@renderer/utils/window'
 
 const REALTIME_CHANNEL = 'starrysky-realtime'
 const app = useAppStore()
+const agents = useAgentsStore()
 const conversations = useConversationsStore()
 const compact = isLoginWindow()
 const popoutWindow = isPopoutWindow()
@@ -57,6 +59,9 @@ watch(
       conversations.reset()
       return
     }
+
+    // 主窗口启动时加载 Agent 列表并恢复上次视角（独立窗口/登录小窗无需加载）
+    if (!compact && !popoutWindow) void agents.init()
 
     void conversations.load(true).catch(() => undefined)
 

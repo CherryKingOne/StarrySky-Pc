@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { AuthSession, AuthUser, TokenPair } from '@renderer/api/auth'
 import { refreshSession } from '@renderer/api/auth'
+import { exchangeAgentToken, type AgentItem } from '@renderer/api/agents'
 import { setTokenRefresher } from '@renderer/api/http'
 
 export type Theme = 'light' | 'dark'
@@ -58,7 +59,14 @@ let refreshTask: Promise<string | null> | null = null
 export const useAppStore = defineStore('app', {
   state: () => ({
     authenticated: Boolean(initialSession?.accessToken),
+    /** 当前生效的令牌：用户身份为用户 Token，Agent 身份为 Agent Token */
     accessToken: initialSession?.accessToken ?? '',
+    /** 用户 Token 始终保留，切回用户身份或管理 Agent 时使用 */
+    userAccessToken: initialSession?.accessToken ?? '',
+    /** Agent 视角的短期令牌（2 小时），仅 Agent 身份生效 */
+    agentAccessToken: '',
+    /** 当前正在使用的 Agent 身份；null 表示用户账号 */
+    actingAgent: null as AgentItem | null,
     refreshToken: initialSession?.refreshToken ?? '',
     user: initialSession?.user ?? (null as AuthUser | null),
     theme: readInitialTheme() as Theme,
@@ -74,6 +82,9 @@ export const useAppStore = defineStore('app', {
     /** 登录 / 注册成功后写入会话并持久化 */
     applySession(session: AuthSession, identifier?: string): void {
       this.accessToken = session.accessToken
+      this.userAccessToken = session.accessToken
+      this.agentAccessToken = ''
+      this.actingAgent = null
       this.refreshToken = session.refreshToken
       this.user = session.user
       this.authenticated = true
@@ -89,9 +100,11 @@ export const useAppStore = defineStore('app', {
     },
     /** 刷新令牌后只替换 token 字段，并持久化 */
     applyTokens(tokens: TokenPair): void {
-      this.accessToken = tokens.accessToken
+      this.userAccessToken = tokens.accessToken
       this.refreshToken = tokens.refreshToken
       this.authenticated = true
+      // Agent 身份下继续使用 Agent Token，避免把视角切回用户
+      if (!this.actingAgent) this.accessToken = tokens.accessToken
       const session: AuthSession = {
         ...tokens,
         user: this.user as AuthUser
@@ -120,9 +133,23 @@ export const useAppStore = defineStore('app', {
       if (refreshTask) return refreshTask
       if (!this.refreshToken) return null
       refreshTask = refreshSession(this.refreshToken)
-        .then((tokens) => {
+        .then(async (tokens) => {
           this.applyTokens(tokens)
-          return tokens.accessToken
+          if (!this.actingAgent) return tokens.accessToken
+
+          // Agent 身份：用户 Token 续期后重新换取 Agent Token
+          try {
+            const agentToken = await exchangeAgentToken(
+              tokens.accessToken,
+              this.actingAgent.agentId
+            )
+            this.agentAccessToken = agentToken.accessToken
+            this.accessToken = agentToken.accessToken
+            return agentToken.accessToken
+          } catch {
+            this.endAgentSession()
+            return tokens.accessToken
+          }
         })
         .catch(() => null)
         .finally(() => {
@@ -131,11 +158,29 @@ export const useAppStore = defineStore('app', {
       return refreshTask
     },
 
+    /** 切换到某个 Agent 视角；token 为空时降级为本地演示身份 */
+    beginAgentSession(agent: AgentItem, token = ''): void {
+      if (!this.actingAgent) this.userAccessToken = this.accessToken
+      this.actingAgent = agent
+      this.agentAccessToken = token
+      if (token) this.accessToken = token
+    },
+
+    /** 切回用户账号，丢弃 Agent Token */
+    endAgentSession(): void {
+      if (this.actingAgent && this.userAccessToken) this.accessToken = this.userAccessToken
+      this.actingAgent = null
+      this.agentAccessToken = ''
+    },
+
     logout(): void {
       refreshTask = null
       setTokenRefresher(null)
       this.authenticated = false
       this.accessToken = ''
+      this.userAccessToken = ''
+      this.agentAccessToken = ''
+      this.actingAgent = null
       this.refreshToken = ''
       this.user = null
       this.locked = false

@@ -781,7 +781,7 @@ async function leaveGroup(): Promise<void> {
     </section>
 
     <!-- 聊天区 -->
-    <section v-if="active" class="flex h-full min-w-0 flex-1 flex-col bg-tertiary">
+    <section v-if="active" class="relative flex h-full min-w-0 flex-1 flex-col bg-tertiary">
       <ChatHeader
         :title="active.name"
         :subtitle="headerSubtitle"
@@ -790,6 +790,17 @@ async function leaveGroup(): Promise<void> {
         @pin="onHeaderPin"
         @info="showInfo = !showInfo"
       />
+
+      <!-- P25 当前身份标识：仅在 Agent 视角显示 -->
+      <div
+        v-if="app.actingAgent"
+        class="pointer-events-none absolute left-1/2 top-3.5 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-[8px] border border-accent bg-accent-subtle px-2.5 py-1.5 shadow-sm"
+      >
+        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-status-success" />
+        <span class="whitespace-nowrap text-caption text-accent">
+          当前身份 · {{ app.actingAgent.nickname }}（Agent）
+        </span>
+      </div>
 
       <div
         ref="scrollArea"

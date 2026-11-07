@@ -60,6 +60,26 @@ const router = createRouter({
           path: 'search',
           name: 'search',
           component: () => import('@renderer/views/SearchView.vue')
+        },
+        {
+          path: 'agents',
+          name: 'agents',
+          component: () => import('@renderer/views/AgentsView.vue')
+        },
+        {
+          path: 'agents/new',
+          name: 'agent-create',
+          component: () => import('@renderer/views/AgentFormView.vue')
+        },
+        {
+          path: 'agents/:agentId/edit',
+          name: 'agent-edit',
+          component: () => import('@renderer/views/AgentFormView.vue')
+        },
+        {
+          path: 'agents/:agentId/permissions',
+          name: 'agent-permissions',
+          component: () => import('@renderer/views/AgentPermissionsView.vue')
         }
       ]
     },
@@ -87,6 +107,10 @@ const TITLES: Record<string, string> = {
   files: '野火IM · 文件记录',
   workbench: '野火IM · 工作台',
   search: '野火IM · 聊天记录搜索',
+  agents: '野火IM · Agent 管理',
+  'agent-create': '野火IM · 创建 Agent',
+  'agent-edit': '野火IM · 编辑 Agent',
+  'agent-permissions': '野火IM · Agent 白名单',
   history: '野火IM · 消息历史',
   popout: '野火IM · 独立聊天窗',
   settings: '野火IM · 设置'

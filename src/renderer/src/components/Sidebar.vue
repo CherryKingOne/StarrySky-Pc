@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import Avatar from '@renderer/components/Avatar.vue'
@@ -7,16 +7,20 @@ import BadgeDigit from '@renderer/components/BadgeDigit.vue'
 import ConfirmDialog from '@renderer/components/ConfirmDialog.vue'
 import ContextMenu, { type MenuItem } from '@renderer/components/ContextMenu.vue'
 import GroupQrDialog from '@renderer/components/GroupQrDialog.vue'
+import IdentitySwitchBadge from '@renderer/components/IdentitySwitchBadge.vue'
 import Toast from '@renderer/components/Toast.vue'
 import UserCardModal from '@renderer/components/UserCardModal.vue'
 import { useAppStore } from '@renderer/stores/app'
+import { useAgentsStore } from '@renderer/stores/agents'
 import { useConversationsStore } from '@renderer/stores/conversations'
 import { logoutSession } from '@renderer/api/auth'
+import { avatarIndexOf } from '@renderer/utils/chat'
 import { hasElectron, sendWindowAction } from '@renderer/utils/window'
 
 const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
+const agents = useAgentsStore()
 const store = useConversationsStore()
 
 const showUserCard = ref(false)
@@ -30,6 +34,28 @@ const nickname = computed(() => app.nickname)
 const avatarIndex = computed(() => app.avatarIndex)
 const userId = computed(() => app.user?.userId ?? '')
 const totalUnread = computed(() => store.totalUnread)
+
+/** Agent 身份下侧栏头像与名称同步切换 */
+const actingAgent = computed(() => app.actingAgent)
+const displayName = computed(() => actingAgent.value?.nickname ?? nickname.value)
+const displayAvatarUrl = computed(() => actingAgent.value?.avatarUrl ?? app.user?.avatarUrl ?? null)
+const displayAvatarIndex = computed(() =>
+  actingAgent.value ? avatarIndexOf(actingAgent.value.nickname) : avatarIndex.value
+)
+
+const identityBadge = ref<InstanceType<typeof IdentitySwitchBadge> | null>(null)
+
+function onAvatarClick(): void {
+  if (actingAgent.value) {
+    identityBadge.value?.open()
+    return
+  }
+  showUserCard.value = true
+}
+
+onMounted(() => {
+  if (!agents.loaded) void agents.load()
+})
 
 function openSettings(): void {
   void router.push('/settings')
@@ -106,6 +132,7 @@ function onMoreSelect(key: string): void {
 async function logout(): Promise<void> {
   showLogout.value = false
   if (app.accessToken) await logoutSession(app.accessToken).catch(() => undefined)
+  agents.$reset()
   app.logout()
   if (hasElectron()) {
     sendWindowAction('auth:logout')
@@ -117,20 +144,25 @@ async function logout(): Promise<void> {
 
 <template>
   <aside class="flex h-full w-sidebar shrink-0 flex-col items-center bg-sidebar">
-    <div class="mt-[68px]">
+    <div class="relative mt-[68px]">
       <button
-        v-tooltip="'我的资料'"
+        v-tooltip="actingAgent ? '切换身份' : '我的资料'"
         type="button"
-        class="rounded-md transition-transform hover:scale-105"
-        @click="showUserCard = true"
+        class="block rounded-md transition-transform hover:scale-105"
+        @click="onAvatarClick"
       >
         <Avatar
-          :name="nickname.charAt(0)"
-          :index="avatarIndex"
-          :avatar-url="app.user?.avatarUrl"
+          :name="displayName.charAt(0)"
+          :index="displayAvatarIndex"
+          :avatar-url="displayAvatarUrl"
           :size="36"
         />
       </button>
+      <IdentitySwitchBadge
+        ref="identityBadge"
+        class="absolute -right-1.5 -bottom-1.5"
+        @toast="showToast"
+      />
     </div>
 
     <nav class="mt-4 flex flex-col items-center gap-8">

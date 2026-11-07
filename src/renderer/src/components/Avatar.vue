@@ -5,7 +5,7 @@ const props = withDefaults(
   defineProps<{
     name: string
     index?: number
-    size?: 32 | 36 | 40 | 64 | 96
+    size?: 28 | 32 | 36 | 40 | 64 | 96
     rounded?: boolean
     avatarUrl?: string | null
   }>(),
@@ -14,6 +14,7 @@ const props = withDefaults(
 
 const colorClass = computed(() => `bg-avatar-${props.index}`)
 const sizeClass = computed(() => {
+  if (props.size === 28) return 'h-7 w-7 text-xs'
   if (props.size === 32) return 'h-8 w-8 text-xs'
   if (props.size === 40) return 'h-10 w-10 text-base'
   if (props.size === 64) return 'h-16 w-16 text-2xl'
