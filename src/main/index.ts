@@ -6,11 +6,18 @@ import icon from '../../resources/icon.png?asset'
 /** 登录卡片窗口尺寸：380×500 卡片 + 透明留白用于阴影 */
 const LOGIN_WIDTH = 420
 const LOGIN_HEIGHT = 548
+/** 主窗口与 Agent 主窗口共用同一套尺寸，保证界面与用户页面完全一致 */
+const MAIN_WIDTH = 1280
+const MAIN_HEIGHT = 800
+const MAIN_MIN_WIDTH = 960
+const MAIN_MIN_HEIGHT = 640
 
 let loginWindow: BrowserWindow | null = null
 let mainWindow: BrowserWindow | null = null
 /** 独立会话窗口：conversationId -> BrowserWindow */
 const popoutWindows = new Map<string, BrowserWindow>()
+/** Agent 主窗口：agentId -> BrowserWindow（每个 Agent 一个完整主界面窗口） */
+const agentWindows = new Map<string, BrowserWindow>()
 
 const preloadScript = join(__dirname, '../preload/index.js')
 const rendererUrl = process.env['ELECTRON_RENDERER_URL']
@@ -75,16 +82,17 @@ function createLoginWindow(): void {
 /** 主窗口：登录成功后创建，保留系统标题栏 */
 function createMainWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
     return
   }
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 960,
-    minHeight: 640,
+    width: MAIN_WIDTH,
+    height: MAIN_HEIGHT,
+    minWidth: MAIN_MIN_WIDTH,
+    minHeight: MAIN_MIN_HEIGHT,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -103,13 +111,55 @@ function createMainWindow(): void {
   loadRoute(mainWindow, '/chats')
 }
 
-/** 为单个会话打开独立窗口，重复打开会聚焦已有窗口 */
-function createPopoutWindow(conversationId: string): void {
-  const id = conversationId?.trim()
-  if (!id || !/^[a-zA-Z0-9:_-]{1,64}$/.test(id)) return
+/**
+ * Agent 主窗口：与用户主窗口完全相同的布局与尺寸，但以该 Agent 身份运行。
+ * 同一个 Agent 重复打开时只聚焦已有窗口。
+ */
+function createAgentWindow(agentId: string): void {
+  const id = typeof agentId === 'string' ? agentId.trim() : ''
+  if (!id || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)) return
 
-  const existed = popoutWindows.get(id)
+  const existed = agentWindows.get(id)
   if (existed && !existed.isDestroyed()) {
+    if (existed.isMinimized()) existed.restore()
+    existed.show()
+    existed.focus()
+    return
+  }
+
+  const window = new BrowserWindow({
+    width: MAIN_WIDTH,
+    height: MAIN_HEIGHT,
+    minWidth: MAIN_MIN_WIDTH,
+    minHeight: MAIN_MIN_HEIGHT,
+    show: false,
+    center: true,
+    autoHideMenuBar: true,
+    title: '野火IM · Agent',
+    ...(process.platform === 'linux' ? { icon } : {}),
+    webPreferences: {
+      preload: preloadScript,
+      sandbox: false
+    }
+  })
+
+  agentWindows.set(id, window)
+  window.once('ready-to-show', () => window.show())
+  window.on('closed', () => agentWindows.delete(id))
+  attachExternalLinks(window)
+  loadRoute(window, '/chats', { agentWindow: '1', agentId: id })
+}
+
+/** 为单个会话打开独立窗口，重复打开会聚焦已有窗口；agentId 用于沿用 Agent 身份 */
+function createPopoutWindow(conversationId: string, agentId = ''): void {
+  const id = typeof conversationId === 'string' ? conversationId.trim() : ''
+  if (!id || !/^[a-zA-Z0-9:_-]{1,64}$/.test(id)) return
+  const agent = typeof agentId === 'string' ? agentId.trim() : ''
+  const windowKey = agent ? `${agent}:${id}` : id
+
+  const existed = popoutWindows.get(windowKey)
+  if (existed && !existed.isDestroyed()) {
+    if (existed.isMinimized()) existed.restore()
     existed.show()
     existed.focus()
     return
@@ -129,11 +179,11 @@ function createPopoutWindow(conversationId: string): void {
     }
   })
 
-  popoutWindows.set(id, window)
+  popoutWindows.set(windowKey, window)
   window.once('ready-to-show', () => window.show())
-  window.on('closed', () => popoutWindows.delete(id))
+  window.on('closed', () => popoutWindows.delete(windowKey))
   attachExternalLinks(window)
-  loadRoute(window, `/popout/${id}`)
+  loadRoute(window, `/popout/${id}`, agent ? { agentWindow: '1', agentId: agent } : undefined)
 }
 
 function registerIpc(): void {
@@ -242,18 +292,40 @@ function registerIpc(): void {
     if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close()
   })
 
-  // 退出登录：先创建登录窗口，再关闭主窗口和所有独立会话窗口
+  // 退出登录：先创建登录窗口，再关闭主窗口、所有 Agent 窗口和独立会话窗口
   ipcMain.on('auth:logout', () => {
     createLoginWindow()
     for (const window of popoutWindows.values()) {
       if (!window.isDestroyed()) window.close()
     }
     popoutWindows.clear()
+    for (const window of agentWindows.values()) {
+      if (!window.isDestroyed()) window.close()
+    }
+    agentWindows.clear()
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close()
   })
 
-  ipcMain.on('window:open-popout', (_event, conversationId: string) => {
-    createPopoutWindow(conversationId)
+  // 兼容旧格式：独立会话窗口可携带 agentId 以沿用 Agent 身份
+  ipcMain.on(
+    'window:open-popout',
+    (_event, payload: { conversationId: string; agentId?: string } | string) => {
+      if (typeof payload === 'string') {
+        createPopoutWindow(payload)
+        return
+      }
+      createPopoutWindow(payload?.conversationId, payload?.agentId)
+    }
+  )
+
+  // 以某个 Agent 身份打开一个与用户主窗口一致的新主窗口
+  ipcMain.on('window:open-agent', (_event, agentId: string) => {
+    createAgentWindow(agentId)
+  })
+
+  // Agent 窗口切回用户账号：聚焦（必要时重建）用户主窗口
+  ipcMain.on('window:focus-main', () => {
+    createMainWindow()
   })
 
   ipcMain.on('window:minimize', (event) => {

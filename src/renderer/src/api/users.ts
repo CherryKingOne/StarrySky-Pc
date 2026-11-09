@@ -11,21 +11,15 @@ export function updateCurrentUser(token: string, payload: UpdateProfilePayload):
 }
 
 /**
- * 搜索可添加的用户：
+ * 搜索可添加的用户（服务端单次最多返回 20 条，无 limit 参数）：
  * - 昵称包含匹配
  * - 账号名前缀匹配
  * - 手机号 / 邮箱 / 用户 ID 精确匹配（需传完整值）
  */
-export function searchUsers(token: string, keyword: string, limit = 20): Promise<ApiUser[]> {
+export function searchUsers(token: string, keyword: string): Promise<ApiUser[]> {
   const normalized = keyword.trim()
   if (!normalized) return Promise.resolve([])
-  const safeLimit = Math.min(Math.max(limit, 1), 50)
-  return apiRequest<ApiUser[]>(
-    `/users/search${buildQuery({ keyword: normalized, limit: safeLimit })}`,
-    {
-      token
-    }
-  )
+  return apiRequest<ApiUser[]>(`/users/search${buildQuery({ keyword: normalized })}`, { token })
 }
 
 export function getUsersBatch(token: string, ids: string[]): Promise<ApiUser[]> {

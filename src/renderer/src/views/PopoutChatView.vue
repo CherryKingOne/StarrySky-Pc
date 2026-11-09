@@ -37,11 +37,21 @@ const showContext = ref(false)
 const showClear = ref(false)
 
 const conversation = computed(() => store.list.find((item) => item.id === id) ?? null)
-const selfAvatar = computed(() => ({
-  name: app.nickname || '我',
-  index: app.avatarIndex,
-  avatarUrl: app.user?.avatarUrl ?? null
-}))
+const selfAvatar = computed(() => {
+  const agent = app.actingAgent
+  if (agent) {
+    return {
+      name: agent.nickname || '我',
+      index: avatarIndexOf(agent.nickname),
+      avatarUrl: agent.avatarUrl
+    }
+  }
+  return {
+    name: app.nickname || '我',
+    index: app.avatarIndex,
+    avatarUrl: app.user?.avatarUrl ?? null
+  }
+})
 
 function senderAvatarOf(message: ChatMessage): {
   name: string
@@ -258,7 +268,8 @@ function locateContext(conversationId: string): void {
           {{
             conversation.group
               ? `${conversation.members?.length ?? 0} 位成员`
-              : !conversation.bot && conversation.targetUserId === app.user?.userId
+              : !conversation.bot &&
+                  conversation.targetUserId === (app.actingAgent?.agentId ?? app.user?.userId)
                 ? '与自己的会话 · 备忘 / 文件传输'
                 : '独立聊天窗'
           }}

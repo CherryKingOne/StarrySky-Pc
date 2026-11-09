@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import AppIcon from '@renderer/components/AppIcon.vue'
 import FloatingPanel from '@renderer/components/FloatingPanel.vue'
 import IdentityPicker from '@renderer/components/IdentityPicker.vue'
 import { useAgentsStore } from '@renderer/stores/agents'
 import { useAppStore } from '@renderer/stores/app'
+import { focusMainWindow, openAgentWindow } from '@renderer/utils/window'
 
 const emit = defineEmits<{ toast: [message: string] }>()
 
 const router = useRouter()
-const route = useRoute()
 const agents = useAgentsStore()
 const app = useAppStore()
 
@@ -40,17 +40,14 @@ function onBadgeClick(): void {
   open.value = !open.value
 }
 
-async function switchAgent(agentId: string): Promise<void> {
+function switchAgent(agentId: string): void {
   if (agents.switching) return
-  try {
-    await agents.switchToAgent(agentId)
-    close()
-    const name = agents.list.find((item) => item.agentId === agentId)?.nickname ?? 'Agent'
-    emit('toast', `已切换为 ${name} 身份`)
-    if (route.path !== '/chats') void router.push('/chats')
-  } catch (error) {
-    emit('toast', error instanceof Error ? error.message : '切换身份失败')
-  }
+  close()
+  if (app.actingAgent?.agentId === agentId) return
+  // Agent 身份在独立主窗口中运行：与用户主窗口并存，互不影响实时消息
+  openAgentWindow(agentId)
+  const name = agents.list.find((item) => item.agentId === agentId)?.nickname ?? 'Agent'
+  emit('toast', `已在独立窗口打开 ${name}`)
 }
 
 function switchUser(): void {
@@ -58,10 +55,10 @@ function switchUser(): void {
     close()
     return
   }
-  agents.switchToUser()
+  // Agent 窗口切回用户：聚焦用户主窗口，不在当前窗口改变身份
+  focusMainWindow()
   close()
-  emit('toast', '已切回用户账号')
-  if (route.path !== '/chats') void router.push('/chats')
+  emit('toast', '已切换到用户账号窗口')
 }
 
 function manage(): void {

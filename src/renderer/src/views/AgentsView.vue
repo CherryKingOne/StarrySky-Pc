@@ -11,6 +11,7 @@ import { useAgentsStore, AGENT_LIMIT } from '@renderer/stores/agents'
 import { useAppStore } from '@renderer/stores/app'
 import type { AgentItem } from '@renderer/api/agents'
 import { avatarIndexOf, formatListTime } from '@renderer/utils/chat'
+import { focusMainWindow, openAgentWindow } from '@renderer/utils/window'
 
 const router = useRouter()
 const app = useAppStore()
@@ -120,20 +121,20 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-async function onSwitchAgent(agentId: string): Promise<void> {
-  try {
-    await agents.switchToAgent(agentId)
-    showIdentityMenu.value = false
-    void router.push('/chats')
-  } catch (error) {
-    showToast(errorText(error, '切换身份失败'))
-  }
+function onSwitchAgent(agentId: string): void {
+  showIdentityMenu.value = false
+  if (app.actingAgent?.agentId === agentId) return
+  // Agent 身份在独立主窗口中运行，用户主窗口保持用户身份
+  openAgentWindow(agentId)
+  const name = agents.list.find((item) => item.agentId === agentId)?.nickname ?? 'Agent'
+  showToast(`已在独立窗口打开 ${name}`)
 }
 
 function onSwitchUser(): void {
-  agents.switchToUser()
   showIdentityMenu.value = false
-  void router.push('/chats')
+  if (!app.actingAgent) return
+  focusMainWindow()
+  showToast('已切换到用户账号窗口')
 }
 </script>
 

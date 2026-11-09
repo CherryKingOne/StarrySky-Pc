@@ -38,18 +38,17 @@ export const useContactsStore = defineStore('contacts', {
           groupApi.listGroups(token)
         ])
         this.friends = friends.map((friend) => {
-          const contact = profileToContact(
-            friend.profile ?? {
-              userId: friend.userId,
-              username: friend.userId,
-              nickname: friend.remark || '好友',
-              avatarUrl: null,
-              gender: 0,
-              signature: null,
-              createdAt: friend.createdAt
-            },
-            friend.remark
-          )
+          // Agent 好友没有 profile，资料来自响应的 agent 摘要
+          const fallback = {
+            userId: friend.userId,
+            username: friend.userId,
+            nickname: friend.agent?.nickname || friend.remark || '好友',
+            avatarUrl: friend.agent?.avatarUrl ?? null,
+            gender: friend.agent?.gender ?? 0,
+            signature: friend.agent?.signature ?? null,
+            createdAt: friend.createdAt
+          }
+          const contact = profileToContact(friend.profile ?? fallback, friend.remark)
           return {
             ...contact,
             group: contact.name.charAt(0).toUpperCase(),
@@ -119,7 +118,7 @@ export const useContactsStore = defineStore('contacts', {
       }
       this.checking = true
       try {
-        const users = await userApi.searchUsers(token, kw, 20)
+        const users = await userApi.searchUsers(token, kw)
         this.searchResults = users.map((user) => ({
           ...profileToContact(user),
           group: '搜索结果',

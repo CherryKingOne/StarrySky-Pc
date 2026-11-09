@@ -2,12 +2,11 @@ import { apiRequest } from '@renderer/api/http'
 import { buildQuery } from '@renderer/api/query'
 import type { ConversationItem } from '@renderer/api/contracts'
 
-export function listConversations(
-  token: string,
-  limit = 50,
-  offset = 0
-): Promise<ConversationItem[]> {
-  return apiRequest<ConversationItem[]>(`/conversations${buildQuery({ limit, offset })}`, { token })
+/** 会话列表单页固定 50 条，通过 offset 翻页 */
+export const CONVERSATION_PAGE_SIZE = 50
+
+export function listConversations(token: string, offset = 0): Promise<ConversationItem[]> {
+  return apiRequest<ConversationItem[]>(`/conversations${buildQuery({ offset })}`, { token })
 }
 
 export function createConversation(token: string, targetUserId: string): Promise<ConversationItem> {

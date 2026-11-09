@@ -55,9 +55,20 @@ class WsClient {
 
   connect(token: string): void {
     if (!token) return
-    if (this.socket && this.token === token && this.currentStatus === 'connected') return
+    // 相同 token 且连接仍在建立/已连接时直接复用，避免重复建连
+    if (
+      this.socket &&
+      this.token === token &&
+      (this.currentStatus === 'connected' ||
+        this.currentStatus === 'connecting' ||
+        this.currentStatus === 'reconnecting')
+    ) {
+      return
+    }
     this.token = token
     this.manualClose = false
+    this.reconnectAttempts = 0
+    this.clearReconnect()
     this.open()
   }
 
@@ -66,8 +77,7 @@ class WsClient {
     this.stopHeartbeat()
     this.clearReconnect()
     this.rejectAll('连接已关闭')
-    this.socket?.close(1000, 'client logout')
-    this.socket = null
+    this.detachSocket('client logout')
     this.setStatus('closed')
   }
 
@@ -113,7 +123,11 @@ class WsClient {
   }
 
   private open(): void {
-    this.socket?.close(1000, 'reconnect')
+    // 先摘掉旧连接的全部回调再关闭，避免旧连接的 onclose 把新连接状态改成重连
+    this.clearReconnectTimer()
+    this.detachSocket('reconnect')
+    // 旧连接上的请求不会再有应答，立即失败让调用方降级到 HTTP
+    this.rejectAll('WebSocket 连接已切换')
     this.setStatus(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting')
     let socket: WebSocket
     try {
@@ -125,12 +139,15 @@ class WsClient {
     this.socket = socket
 
     socket.onopen = () => {
+      if (this.socket !== socket) return
       this.reconnectAttempts = 0
+      this.clearReconnectTimer()
       this.setStatus('connected')
       this.startHeartbeat()
     }
 
     socket.onmessage = (event: MessageEvent<string>) => {
+      if (this.socket !== socket) return
       let frame: WsFrame
       try {
         frame = JSON.parse(event.data) as WsFrame
@@ -141,6 +158,8 @@ class WsClient {
     }
 
     socket.onclose = () => {
+      if (this.socket !== socket) return
+      this.socket = null
       this.stopHeartbeat()
       this.rejectAll('WebSocket 连接已断开')
       if (this.manualClose) {
@@ -153,7 +172,27 @@ class WsClient {
 
     socket.onerror = () => {
       // onclose 会紧接着触发，这里只保证状态可见
-      if (this.currentStatus === 'connected') this.setStatus('reconnecting')
+      if (this.socket === socket && this.currentStatus === 'connected') {
+        this.setStatus('reconnecting')
+      }
+    }
+  }
+
+  /** 解绑并关闭当前 socket：回调会被移除，旧连接的关闭不会影响新连接 */
+  private detachSocket(reason: string): void {
+    const socket = this.socket
+    this.socket = null
+    if (!socket) return
+    socket.onopen = null
+    socket.onmessage = null
+    socket.onerror = null
+    socket.onclose = null
+    try {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close(1000, reason)
+      }
+    } catch {
+      /* 连接已经关闭时忽略 */
     }
   }
 
@@ -196,7 +235,7 @@ class WsClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.manualClose || this.reconnectTimer) return
+    if (this.manualClose || this.reconnectTimer || this.socket) return
     const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000)
     this.reconnectAttempts += 1
     this.reconnectTimer = window.setTimeout(() => {
@@ -205,11 +244,15 @@ class WsClient {
     }, delay)
   }
 
-  private clearReconnect(): void {
+  private clearReconnectTimer(): void {
     if (this.reconnectTimer) {
       window.clearTimeout(this.reconnectTimer)
       this.reconnectTimer = undefined
     }
+  }
+
+  private clearReconnect(): void {
+    this.clearReconnectTimer()
     this.reconnectAttempts = 0
   }
 

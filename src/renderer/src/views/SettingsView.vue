@@ -17,14 +17,23 @@ import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { settingsNavs } from '@renderer/data/mock'
 import { logoutSession } from '@renderer/api/auth'
+import { getAgent, updateAgent } from '@renderer/api/agents'
 import { getCurrentUser, updateCurrentUser } from '@renderer/api/users'
 import { uploadFile } from '@renderer/api/files'
+import { useAgentsStore } from '@renderer/stores/agents'
 import { useAppStore } from '@renderer/stores/app'
 import { useConversationsStore } from '@renderer/stores/conversations'
-import { hasElectron, sendWindowAction } from '@renderer/utils/window'
+import { avatarIndexOf } from '@renderer/utils/chat'
+import {
+  focusMainWindow,
+  hasElectron,
+  isAgentWindow,
+  sendWindowAction
+} from '@renderer/utils/window'
 
 const router = useRouter()
 const app = useAppStore()
+const agents = useAgentsStore()
 const conversations = useConversationsStore()
 
 const activeNav = ref('account')
@@ -40,6 +49,9 @@ const showQuiet = ref(false)
 const showDevices = ref(false)
 const showVerify = ref(false)
 const showProfileEdit = ref(false)
+const showDisableAgent = ref(false)
+const showDeleteAgent = ref(false)
+const agentBusy = ref(false)
 const avatarInput = ref<HTMLInputElement | null>(null)
 const uploadingAvatar = ref(false)
 
@@ -80,6 +92,30 @@ const resetChannel = computed<'phone' | 'email'>(() =>
 const resetChannelLabel = computed(() => (resetChannel.value === 'phone' ? '手机号' : '邮箱'))
 const language = computed(() => app.language)
 const quiet = computed(() => notifications.quiet)
+
+/** Agent 身份派生数据：设置页整体跟随当前身份 */
+const actingAgent = computed(() => app.actingAgent)
+const isAgent = computed(() => Boolean(actingAgent.value))
+const agentId = computed(() => app.actingAgent?.agentId ?? '')
+const agentNickname = computed(() => app.actingAgent?.nickname ?? '')
+const agentAvatarUrl = computed(() => app.actingAgent?.avatarUrl ?? null)
+const agentAvatarIndex = computed(() => avatarIndexOf(agentNickname.value))
+const agentSignature = computed(() => app.actingAgent?.signature ?? '')
+const agentGender = computed(() => app.actingAgent?.gender ?? 0)
+const agentOwnerId = computed(() => app.actingAgent?.userId ?? '')
+const agentStatusText = computed(() => {
+  const status = app.actingAgent?.status
+  if (status === 'ACTIVE') return '正常'
+  if (status === 'DISABLED') return '已停用'
+  if (status === 'DELETED') return '已删除'
+  return '—'
+})
+const agentCreatedAt = computed(() => formatAgentStamp(app.actingAgent?.createdAt))
+
+function formatAgentStamp(value: string | null | undefined): string {
+  if (!value) return '—'
+  return value.replace('T', ' ').slice(0, 16)
+}
 
 function toggleTheme(): void {
   app.toggleTheme()
@@ -127,17 +163,42 @@ async function copyAccountId(): Promise<void> {
   }
 }
 
+async function copyAgentId(): Promise<void> {
+  if (!agentId.value) {
+    showToast('当前 Agent 暂无 ID')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(agentId.value)
+    showToast('Agent ID 已复制到剪贴板')
+  } catch {
+    showToast('复制失败，请手动选择 ID 文本')
+  }
+}
+
 async function onAvatarFile(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file || !app.accessToken) return
+  if (isAgent.value && agents.demo) {
+    showToast('离线示例身份不支持上传头像')
+    return
+  }
   uploadingAvatar.value = true
   try {
     const info = await uploadFile(app.accessToken, file, 1)
-    const user = await updateCurrentUser(app.accessToken, { avatarUrl: info.url })
-    app.updateUser(user)
-    showToast('头像已上传并保存')
+    if (isAgent.value) {
+      const agent = app.actingAgent
+      if (!agent) return
+      const next = await updateAgent(app.accessToken, agent.agentId, { avatarUrl: info.url })
+      agents.applyAgent(next)
+      showToast('Agent 头像已上传并保存')
+    } else {
+      const user = await updateCurrentUser(app.accessToken, { avatarUrl: info.url })
+      app.updateUser(user)
+      showToast('头像已上传并保存')
+    }
   } catch (error) {
     showToast(error instanceof Error ? error.message : '头像上传失败')
   } finally {
@@ -150,6 +211,10 @@ async function saveProfile(payload: {
   signature: string
   gender: number
 }): Promise<void> {
+  if (isAgent.value) {
+    await saveAgentProfile(payload)
+    return
+  }
   if (!app.accessToken) return
   try {
     const user = await updateCurrentUser(app.accessToken, payload)
@@ -158,6 +223,80 @@ async function saveProfile(payload: {
     showToast('资料已保存')
   } catch (error) {
     showToast(error instanceof Error ? error.message : '资料保存失败')
+  }
+}
+
+/** Agent 资料：真实后端走 Agent Token，离线示例走本地 store */
+async function saveAgentProfile(payload: {
+  nickname: string
+  signature: string
+  gender: number
+}): Promise<void> {
+  const agent = app.actingAgent
+  if (!agent) return
+  try {
+    if (agents.demo) {
+      await agents.update(agent.agentId, payload)
+    } else {
+      const next = await updateAgent(app.accessToken, agent.agentId, payload)
+      agents.applyAgent(next)
+    }
+    showProfileEdit.value = false
+    showToast('Agent 资料已保存')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '资料保存失败')
+  }
+}
+
+function goAgentPermissions(): void {
+  if (!agentId.value) return
+  void router.push(`/agents/${encodeURIComponent(agentId.value)}/permissions`)
+}
+
+function switchBackToUser(): void {
+  // Agent 身份运行在独立窗口，切回用户即聚焦用户主窗口
+  focusMainWindow()
+  showToast('已切换到用户账号窗口')
+}
+
+/** Agent 被停用/删除后，关闭当前 Agent 窗口回到用户主窗口 */
+function closeAgentWindowIfNeeded(): void {
+  if (!isAgentWindow()) return
+  focusMainWindow()
+  if (hasElectron()) sendWindowAction('window:close')
+}
+
+async function disableAgent(): Promise<void> {
+  showDisableAgent.value = false
+  const agent = app.actingAgent
+  if (!agent || agentBusy.value) return
+  agentBusy.value = true
+  try {
+    await agents.setStatus(agent.agentId, 'DISABLED')
+    showToast('Agent 已停用')
+    closeAgentWindowIfNeeded()
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '停用 Agent 失败')
+  } finally {
+    agentBusy.value = false
+  }
+}
+
+async function deleteAgent(): Promise<void> {
+  showDeleteAgent.value = false
+  const agent = app.actingAgent
+  if (!agent || agentBusy.value) return
+  agentBusy.value = true
+  try {
+    await agents.remove(agent.agentId)
+    showToast('Agent 已删除')
+    closeAgentWindowIfNeeded()
+    void router.push('/chats')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '删除 Agent 失败')
+  } finally {
+    agentBusy.value = false
   }
 }
 
@@ -206,6 +345,16 @@ const notificationRows = computed(() => [
   { key: 'mute' as const, label: '开启免打扰' }
 ])
 
+/** Agent 身份下后端没有对应能力的账号与安全项 */
+const agentUnavailableRows = [
+  { label: '登录账号', reason: 'Agent 没有独立登录账号，由归属的人类账号管理' },
+  { label: '登录密码', reason: 'Agent 无独立密码体系，不可修改' },
+  { label: '密码重置', reason: 'Agent 不支持密码重置，由归属账号处理' },
+  { label: '多端登录', reason: 'Agent 无多端会话管理接口' },
+  { label: '安全验证', reason: 'Agent 无安全验证接口' },
+  { label: '登录设备', reason: 'Agent 无设备管理接口' }
+]
+
 function showToast(message: string): void {
   toastMessage.value = ''
   window.setTimeout(() => {
@@ -245,6 +394,17 @@ function checkUpdate(): void {
 
 onMounted(async () => {
   if (!app.accessToken) return
+  // Agent 身份：用 Agent Token 刷新该 Agent 自己的资料
+  if (app.actingAgent) {
+    if (agents.demo) return
+    try {
+      const agent = await getAgent(app.accessToken, app.actingAgent.agentId)
+      agents.applyAgent(agent)
+    } catch {
+      /* 拉取失败时沿用切换身份时的资料 */
+    }
+    return
+  }
   try {
     const user = await getCurrentUser(app.accessToken)
     app.updateUser(user)
@@ -286,12 +446,22 @@ onMounted(async () => {
           锁定应用
         </button>
         <button
+          v-if="!isAgent"
           type="button"
           class="flex h-9 items-center gap-2 rounded-md px-4 text-label text-danger transition-colors hover:bg-item-hover"
           @click="showLogout = true"
         >
           <AppIcon name="ion:log-out" :size="16" />
           退出登录
+        </button>
+        <button
+          v-else
+          type="button"
+          class="flex h-9 items-center gap-2 rounded-md px-4 text-label text-muted-foreground transition-colors hover:bg-item-hover hover:text-foreground"
+          @click="switchBackToUser"
+        >
+          <AppIcon name="ion:person" :size="16" />
+          切回用户账号
         </button>
       </div>
     </nav>
@@ -339,181 +509,354 @@ onMounted(async () => {
 
         <!-- 账号与安全 -->
         <template v-else-if="activeNav === 'account'">
-          <div class="flex items-center gap-4 rounded-lg bg-panel p-4">
-            <button
-              v-tooltip="'修改头像'"
-              type="button"
-              class="relative shrink-0"
-              @click="showCrop = true"
-            >
-              <Avatar
-                :name="nickname"
-                :index="avatarIndex"
-                :avatar-url="userAvatarUrl"
-                :size="40"
-              />
-              <span
-                class="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-on-accent"
-              >
-                <AppIcon name="ion:android-create" :size="10" />
-              </span>
-            </button>
-            <div class="min-w-0 flex-1">
-              <p class="text-label text-foreground">{{ nickname }}</p>
+          <!-- Agent 身份：该 Agent 自己的账号与安全 -->
+          <template v-if="isAgent">
+            <div class="flex items-center gap-4 rounded-lg bg-panel p-4">
               <button
-                v-tooltip="'点击复制 ID'"
+                v-tooltip="agents.demo ? '离线示例身份不支持上传头像' : '修改头像'"
                 type="button"
-                class="mt-0.5 inline-flex items-center gap-1 text-micro text-secondary-foreground transition-colors hover:text-accent"
-                @click="copyAccountId"
-              >
-                ID: {{ userId }}
-                <AppIcon name="ion:copy-outline" :size="11" />
-              </button>
-            </div>
-            <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
-                @click="openSelfChat"
-              >
-                <AppIcon name="ion:chatboxes" :size="14" />
-                发消息给自己
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
-                @click="showProfileEdit = true"
-              >
-                <AppIcon name="ion:android-create" :size="14" />
-                编辑资料
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover disabled:opacity-50"
-                :disabled="uploadingAvatar"
+                class="relative shrink-0"
+                :disabled="agents.demo"
                 @click="pickAvatar"
               >
-                <AppIcon name="ion:ios-cloud-upload" :size="14" />
-                {{ uploadingAvatar ? '上传中' : '上传头像' }}
+                <Avatar
+                  :name="agentNickname"
+                  :index="agentAvatarIndex"
+                  :avatar-url="agentAvatarUrl"
+                  :size="40"
+                />
+                <span
+                  class="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-on-accent"
+                >
+                  <AppIcon name="ion:android-create" :size="10" />
+                </span>
               </button>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
-                @click="showQr = true"
-              >
-                <AppIcon name="ion:qr-code" :size="14" />
-                我的二维码
-              </button>
+              <div class="min-w-0 flex-1">
+                <p class="flex items-center gap-2 text-label text-foreground">
+                  {{ agentNickname }}
+                  <span class="rounded-sm bg-accent-subtle px-1.5 py-0.5 text-micro text-accent">
+                    Agent
+                  </span>
+                </p>
+                <button
+                  v-tooltip="'点击复制 Agent ID'"
+                  type="button"
+                  class="mt-0.5 inline-flex items-center gap-1 font-mono text-micro text-secondary-foreground transition-colors hover:text-accent"
+                  @click="copyAgentId"
+                >
+                  Agent ID: {{ agentId }}
+                  <AppIcon name="ion:copy-outline" :size="11" />
+                </button>
+              </div>
+              <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                  @click="showProfileEdit = true"
+                >
+                  <AppIcon name="ion:android-create" :size="14" />
+                  编辑资料
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover disabled:opacity-50"
+                  :disabled="uploadingAvatar || agents.demo"
+                  @click="pickAvatar"
+                >
+                  <AppIcon name="ion:ios-cloud-upload" :size="14" />
+                  {{ uploadingAvatar ? '上传中' : '上传头像' }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                  @click="goAgentPermissions"
+                >
+                  <AppIcon name="ion:shield-checkmark" :size="14" />
+                  聊天白名单
+                </button>
+              </div>
             </div>
-          </div>
+            <p v-if="agents.demo" class="mt-2 text-micro text-tertiary-foreground">
+              离线示例身份下头像上传不可用；昵称、签名等资料仍可在本地保存。
+            </p>
 
-          <div class="mt-4 flex flex-col">
-            <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">登录账号</span>
-              <span class="text-small text-secondary-foreground">{{ phone || '未绑定' }}</span>
+            <div class="mt-4 flex flex-col">
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">归属账号</span>
+                <span class="max-w-[60%] break-all text-right text-small text-secondary-foreground">
+                  {{ agentOwnerId || '—' }}
+                </span>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">创建时间</span>
+                <span class="text-small text-secondary-foreground">{{ agentCreatedAt }}</span>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">状态</span>
+                <span class="text-small text-secondary-foreground">{{ agentStatusText }}</span>
+              </div>
+              <div class="flex h-14 items-center justify-between">
+                <span class="text-label text-foreground">聊天白名单</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="goAgentPermissions"
+                >
+                  管理白名单
+                </button>
+              </div>
             </div>
-            <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">登录密码</span>
-              <button
-                type="button"
-                class="text-small text-link hover:text-link-hover"
-                @click="showChangePassword = true"
-              >
-                修改
-              </button>
-            </div>
-            <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">密码重置</span>
-              <button
-                type="button"
-                class="text-small text-link hover:text-link-hover"
-                @click="showResetPage = true"
-              >
-                通过{{ resetChannelLabel }}重置
-              </button>
-            </div>
-            <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">多端登录</span>
-              <span class="text-small text-secondary-foreground">已开启</span>
-            </div>
-            <div class="flex h-14 items-center justify-between border-b border-divider">
-              <span class="text-label text-foreground">安全验证</span>
-              <button
-                type="button"
-                class="text-small text-link hover:text-link-hover"
-                @click="showVerify = true"
-              >
-                拖动滑块验证
-              </button>
-            </div>
-            <div class="flex h-14 items-center justify-between">
-              <span class="text-label text-foreground">登录设备</span>
-              <button
-                type="button"
-                class="text-small text-link hover:text-link-hover"
-                @click="showDevices = true"
-              >
-                查看 4 台设备
-              </button>
-            </div>
-          </div>
 
-          <div class="mt-5 flex gap-2">
-            <button
-              type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-sm border border-border bg-input px-4 text-label text-foreground transition-colors hover:bg-item-hover"
-              @click="lockApp"
-            >
-              <AppIcon name="ion:lock-closed" :size="14" />
-              锁定应用
-            </button>
-            <button
-              type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-sm px-4 text-label text-danger transition-colors hover:bg-item-hover"
-              @click="showLogout = true"
-            >
-              <AppIcon name="ion:log-out" :size="14" />
-              退出登录
-            </button>
-          </div>
+            <div class="mt-5 flex flex-col">
+              <p class="mb-1 text-micro text-tertiary-foreground">账号与安全</p>
+              <div
+                v-for="row in agentUnavailableRows"
+                :key="row.label"
+                class="flex min-h-14 items-center justify-between gap-4 border-b border-divider py-2"
+              >
+                <span class="shrink-0 text-label text-foreground">{{ row.label }}</span>
+                <span class="max-w-[62%] text-right text-small text-tertiary-foreground">
+                  {{ row.reason }}
+                </span>
+              </div>
+            </div>
+            <p class="mt-3 text-micro text-tertiary-foreground">
+              Agent 使用短期令牌运行，登录与安全能力由归属的人类账号统一管理。
+            </p>
+
+            <div class="mt-5 flex gap-2">
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-1.5 rounded-sm border border-border bg-input px-4 text-label text-foreground transition-colors hover:bg-item-hover disabled:opacity-50"
+                :disabled="agentBusy"
+                @click="showDisableAgent = true"
+              >
+                <AppIcon name="ion:pause-circle" :size="14" />
+                停用 Agent
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-1.5 rounded-sm px-4 text-label text-danger transition-colors hover:bg-item-hover disabled:opacity-50"
+                :disabled="agentBusy"
+                @click="showDeleteAgent = true"
+              >
+                <AppIcon name="ion:trash" :size="14" />
+                删除 Agent
+              </button>
+            </div>
+          </template>
+
+          <!-- 用户身份：保持原样 -->
+          <template v-else>
+            <div class="flex items-center gap-4 rounded-lg bg-panel p-4">
+              <button
+                v-tooltip="'修改头像'"
+                type="button"
+                class="relative shrink-0"
+                @click="showCrop = true"
+              >
+                <Avatar
+                  :name="nickname"
+                  :index="avatarIndex"
+                  :avatar-url="userAvatarUrl"
+                  :size="40"
+                />
+                <span
+                  class="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-on-accent"
+                >
+                  <AppIcon name="ion:android-create" :size="10" />
+                </span>
+              </button>
+              <div class="min-w-0 flex-1">
+                <p class="text-label text-foreground">{{ nickname }}</p>
+                <button
+                  v-tooltip="'点击复制 ID'"
+                  type="button"
+                  class="mt-0.5 inline-flex items-center gap-1 text-micro text-secondary-foreground transition-colors hover:text-accent"
+                  @click="copyAccountId"
+                >
+                  ID: {{ userId }}
+                  <AppIcon name="ion:copy-outline" :size="11" />
+                </button>
+              </div>
+              <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                  @click="openSelfChat"
+                >
+                  <AppIcon name="ion:chatboxes" :size="14" />
+                  发消息给自己
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                  @click="showProfileEdit = true"
+                >
+                  <AppIcon name="ion:android-create" :size="14" />
+                  编辑资料
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover disabled:opacity-50"
+                  :disabled="uploadingAvatar"
+                  @click="pickAvatar"
+                >
+                  <AppIcon name="ion:ios-cloud-upload" :size="14" />
+                  {{ uploadingAvatar ? '上传中' : '上传头像' }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-input px-3 text-small text-foreground transition-colors hover:bg-item-hover"
+                  @click="showQr = true"
+                >
+                  <AppIcon name="ion:qr-code" :size="14" />
+                  我的二维码
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-col">
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">登录账号</span>
+                <span class="text-small text-secondary-foreground">{{ phone || '未绑定' }}</span>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">登录密码</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="showChangePassword = true"
+                >
+                  修改
+                </button>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">密码重置</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="showResetPage = true"
+                >
+                  通过{{ resetChannelLabel }}重置
+                </button>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">多端登录</span>
+                <span class="text-small text-secondary-foreground">已开启</span>
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">安全验证</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="showVerify = true"
+                >
+                  拖动滑块验证
+                </button>
+              </div>
+              <div class="flex h-14 items-center justify-between">
+                <span class="text-label text-foreground">登录设备</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="showDevices = true"
+                >
+                  查看 4 台设备
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-5 flex gap-2">
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-1.5 rounded-sm border border-border bg-input px-4 text-label text-foreground transition-colors hover:bg-item-hover"
+                @click="lockApp"
+              >
+                <AppIcon name="ion:lock-closed" :size="14" />
+                锁定应用
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-1.5 rounded-sm px-4 text-label text-danger transition-colors hover:bg-item-hover"
+                @click="showLogout = true"
+              >
+                <AppIcon name="ion:log-out" :size="14" />
+                退出登录
+              </button>
+            </div>
+          </template>
         </template>
 
         <!-- 消息通知 -->
         <template v-else-if="activeNav === 'notifications'">
-          <div class="flex flex-col">
+          <!-- Agent 身份：无通知接口，明确不可用 -->
+          <template v-if="isAgent">
             <div
-              v-for="row in notificationRows"
-              :key="row.key"
-              class="flex h-14 items-center justify-between border-b border-divider"
+              class="mb-3 rounded-md border border-border bg-panel px-4 py-3 text-caption text-secondary-foreground"
             >
-              <span class="text-label text-foreground">{{ row.label }}</span>
-              <SwitchToggle v-model="notifications[row.key]" />
+              Agent 暂无独立通知接口，以下设置不可用；通知由客户端与归属账号统一控制。
             </div>
-            <button
-              type="button"
-              class="flex h-14 items-center justify-between border-b border-divider text-left"
-              @click="showQuiet = true"
-            >
-              <span class="text-label text-foreground">免打扰时间</span>
-              <span class="inline-flex items-center gap-1 text-small text-secondary-foreground">
-                {{ quiet }}
-                <AppIcon name="ion:ios-arrow-right" :size="14" />
-              </span>
-            </button>
-            <div class="flex h-14 items-center justify-between">
-              <span class="text-label text-foreground">通知音效</span>
+            <div class="flex flex-col opacity-60">
+              <div
+                v-for="row in notificationRows"
+                :key="row.key"
+                class="flex h-14 items-center justify-between border-b border-divider"
+              >
+                <span class="text-label text-foreground">{{ row.label }}</span>
+                <SwitchToggle :model-value="notifications[row.key]" disabled />
+              </div>
+              <div class="flex h-14 items-center justify-between border-b border-divider">
+                <span class="text-label text-foreground">免打扰时间</span>
+                <span class="text-small text-tertiary-foreground">{{ quiet }}（不可用）</span>
+              </div>
+              <div class="flex h-14 items-center justify-between">
+                <span class="text-label text-foreground">通知音效</span>
+                <span class="text-small text-tertiary-foreground">不可用</span>
+              </div>
+            </div>
+            <p class="mt-3 text-micro text-tertiary-foreground">
+              原因：后端没有 Agent 通知配置接口，不能为单个 Agent 保存通知偏好。
+            </p>
+          </template>
+
+          <!-- 用户身份：保持原样 -->
+          <template v-else>
+            <div class="flex flex-col">
+              <div
+                v-for="row in notificationRows"
+                :key="row.key"
+                class="flex h-14 items-center justify-between border-b border-divider"
+              >
+                <span class="text-label text-foreground">{{ row.label }}</span>
+                <SwitchToggle v-model="notifications[row.key]" />
+              </div>
               <button
                 type="button"
-                class="text-small text-link hover:text-link-hover"
-                @click="showToast('已播放通知音效')"
+                class="flex h-14 items-center justify-between border-b border-divider text-left"
+                @click="showQuiet = true"
               >
-                试听
+                <span class="text-label text-foreground">免打扰时间</span>
+                <span class="inline-flex items-center gap-1 text-small text-secondary-foreground">
+                  {{ quiet }}
+                  <AppIcon name="ion:ios-arrow-right" :size="14" />
+                </span>
               </button>
+              <div class="flex h-14 items-center justify-between">
+                <span class="text-label text-foreground">通知音效</span>
+                <button
+                  type="button"
+                  class="text-small text-link hover:text-link-hover"
+                  @click="showToast('已播放通知音效')"
+                >
+                  试听
+                </button>
+              </div>
             </div>
-          </div>
-          <p class="mt-3 text-micro text-tertiary-foreground">
-            免打扰期间仍会接收消息，但不会弹出通知横幅。
-          </p>
+            <p class="mt-3 text-micro text-tertiary-foreground">
+              免打扰期间仍会接收消息，但不会弹出通知横幅。
+            </p>
+          </template>
         </template>
 
         <!-- 通用设置 -->
@@ -554,12 +897,26 @@ onMounted(async () => {
 
         <!-- 机器人：只读目录，创建/删除只在开发者后台 -->
         <template v-else-if="activeNav === 'bots'">
-          <BotDirectory />
+          <BotDirectory v-if="!isAgent" />
+          <div v-else class="rounded-lg bg-panel px-6 py-8 text-center">
+            <AppIcon name="ion:hardware-chip" :size="28" class="text-tertiary-foreground" />
+            <p class="mt-3 text-label text-foreground">Agent 身份下不可用</p>
+            <p class="mt-1 text-caption text-secondary-foreground">
+              机器人目录属于归属的人类账号，Agent Token 没有该接口。
+            </p>
+          </div>
         </template>
 
         <!-- 黑名单 -->
         <template v-else-if="activeNav === 'blacklist'">
-          <BlacklistPanel />
+          <BlacklistPanel v-if="!isAgent" />
+          <div v-else class="rounded-lg bg-panel px-6 py-8 text-center">
+            <AppIcon name="ion:ban" :size="28" class="text-tertiary-foreground" />
+            <p class="mt-3 text-label text-foreground">Agent 身份下不可用</p>
+            <p class="mt-1 text-caption text-secondary-foreground">
+              后端没有 Agent 黑名单接口，黑名单由归属的人类账号管理。
+            </p>
+          </div>
         </template>
 
         <!-- 关于 -->
@@ -635,9 +992,9 @@ onMounted(async () => {
 
     <EditProfileDialog
       :visible="showProfileEdit"
-      :nickname="nickname"
-      :signature="userSignature"
-      :gender="userGender"
+      :nickname="isAgent ? agentNickname : nickname"
+      :signature="isAgent ? agentSignature : userSignature"
+      :gender="isAgent ? agentGender : userGender"
       @close="showProfileEdit = false"
       @save="saveProfile"
     />
@@ -688,6 +1045,26 @@ onMounted(async () => {
       danger
       @cancel="showLogout = false"
       @confirm="logout"
+    />
+
+    <!-- Agent 停用 / 删除 -->
+    <ConfirmDialog
+      :visible="showDisableAgent"
+      title="停用 Agent"
+      :description="`停用后「${agentNickname}」将无法切换视角或收发消息，确定停用吗？`"
+      confirm-text="停用"
+      danger
+      @cancel="showDisableAgent = false"
+      @confirm="disableAgent"
+    />
+    <ConfirmDialog
+      :visible="showDeleteAgent"
+      title="删除 Agent"
+      :description="`删除后不可恢复，聊天白名单与身份数据将一并失效。确定删除「${agentNickname}」吗？`"
+      confirm-text="删除"
+      danger
+      @cancel="showDeleteAgent = false"
+      @confirm="deleteAgent"
     />
 
     <Toast :message="toastMessage" @close="toastMessage = ''" />

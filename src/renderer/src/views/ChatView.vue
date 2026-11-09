@@ -51,11 +51,22 @@ function showToast(message: string): void {
 
 const active = computed(() => store.activeConversation)
 const highlightId = computed(() => store.highlightId)
-const selfAvatar = computed(() => ({
-  name: app.nickname || '我',
-  index: app.avatarIndex,
-  avatarUrl: app.user?.avatarUrl ?? null
-}))
+const selfAvatar = computed(() => {
+  const agent = app.actingAgent
+  // Agent 窗口内“我”的头像与昵称必须跟随当前身份
+  if (agent) {
+    return {
+      name: agent.nickname || '我',
+      index: avatarIndexOf(agent.nickname),
+      avatarUrl: agent.avatarUrl
+    }
+  }
+  return {
+    name: app.nickname || '我',
+    index: app.avatarIndex,
+    avatarUrl: app.user?.avatarUrl ?? null
+  }
+})
 
 function senderAvatarOf(message: ChatMessage): {
   name: string
@@ -97,7 +108,8 @@ const headerSubtitle = computed(() => {
   if (conversation.targetType === 'BOT') {
     return conversation.bot?.description || '机器人'
   }
-  if (!conversation.group && conversation.targetUserId === app.user?.userId) {
+  const selfId = app.actingAgent?.agentId ?? app.user?.userId
+  if (!conversation.group && conversation.targetUserId === selfId) {
     return '与自己的会话 · 备忘 / 文件传输'
   }
   if (conversation.group) return `${conversation.members?.length ?? 0} 位成员`
@@ -124,7 +136,7 @@ function openHistory(): void {
 
 function openPopout(): void {
   if (!active.value) return
-  openPopoutWindow(active.value.id)
+  openPopoutWindow(active.value.id, app.actingAgent?.agentId)
 }
 
 function openFloat(): void {
@@ -149,7 +161,7 @@ async function openProfileChat(): Promise<void> {
 
 function expandFloat(id: string): void {
   showFloat.value = false
-  openPopoutWindow(id)
+  openPopoutWindow(id, app.actingAgent?.agentId)
 }
 
 function clearChat(): void {
@@ -369,7 +381,7 @@ function onConvMenuSelect(key: string): void {
       }
       break
     case 'popout':
-      openPopoutWindow(conv.id)
+      openPopoutWindow(conv.id, app.actingAgent?.agentId)
       break
     case 'hide':
       askHideConversation(conv)
@@ -768,7 +780,7 @@ async function leaveGroup(): Promise<void> {
           :active="conversation.id === active?.id"
           class="cursor-pointer"
           @click="selectConversation(conversation.id)"
-          @dblclick="openPopoutWindow(conversation.id)"
+          @dblclick="openPopoutWindow(conversation.id, app.actingAgent?.agentId)"
           @contextmenu="onConversationContextMenu"
         />
         <p

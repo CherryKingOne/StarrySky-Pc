@@ -10,11 +10,3 @@ export function buildQuery(
   const text = search.toString()
   return text ? `?${text}` : ''
 }
-
-/** 数组参数按 Spring 的 `ids=1&ids=2` 形式追加 */
-export function buildArrayQuery(key: string, values: string[]): string {
-  const search = new URLSearchParams()
-  for (const value of values) search.append(key, value)
-  const text = search.toString()
-  return text ? `?${text}` : ''
-}

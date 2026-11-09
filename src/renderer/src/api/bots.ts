@@ -4,13 +4,9 @@ import type { BotCredential, BotEventConfig, BotItem, BotSummary } from '@render
 
 const botPath = (botId: string): string => `/bots/${encodeURIComponent(botId)}`
 
-/** 全量机器人目录：普通用户发现机器人，创建/删除只能在开发者后台 */
-export function listBotDirectory(
-  token: string,
-  keyword?: string,
-  limit = 20
-): Promise<BotSummary[]> {
-  return apiRequest<BotSummary[]>(`/bots/directory${buildQuery({ keyword, limit })}`, { token })
+/** 机器人目录：普通用户发现机器人，单次最多 20 条；创建/删除只能在开发者后台 */
+export function listBotDirectory(token: string, keyword?: string): Promise<BotSummary[]> {
+  return apiRequest<BotSummary[]>(`/bots/directory${buildQuery({ keyword })}`, { token })
 }
 
 /** 当前账号在开发者后台拥有的机器人 */

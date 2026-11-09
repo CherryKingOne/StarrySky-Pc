@@ -24,6 +24,7 @@ const agents = useAgentsStore()
 const store = useConversationsStore()
 
 const showUserCard = ref(false)
+const showAgentCard = ref(false)
 const showQr = ref(false)
 const showLogout = ref(false)
 const showMoreMenu = ref(false)
@@ -43,11 +44,32 @@ const displayAvatarIndex = computed(() =>
   actingAgent.value ? avatarIndexOf(actingAgent.value.nickname) : avatarIndex.value
 )
 
-const identityBadge = ref<InstanceType<typeof IdentitySwitchBadge> | null>(null)
+function formatAgentStamp(value: string | null | undefined): string {
+  if (!value) return '—'
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+function agentStatusLabel(status: string): string {
+  if (status === 'ACTIVE') return '正常'
+  if (status === 'DISABLED') return '已停用'
+  if (status === 'DELETED') return '已删除'
+  return '—'
+}
+
+/** Agent 资料卡：归属账号、创建时间、状态 */
+const agentCardMeta = computed(() => {
+  const agent = actingAgent.value
+  if (!agent) return []
+  return [
+    { label: '归属账号', value: agent.userId || '—' },
+    { label: '创建时间', value: formatAgentStamp(agent.createdAt) },
+    { label: '状态', value: agentStatusLabel(agent.status) }
+  ]
+})
 
 function onAvatarClick(): void {
   if (actingAgent.value) {
-    identityBadge.value?.open()
+    showAgentCard.value = true
     return
   }
   showUserCard.value = true
@@ -86,6 +108,22 @@ function showToast(message: string): void {
 function onCardSettings(): void {
   showUserCard.value = false
   openSettings()
+}
+
+function onAgentSettings(): void {
+  showAgentCard.value = false
+  openSettings()
+}
+
+function onAgentWhitelist(): void {
+  showAgentCard.value = false
+  const agentId = actingAgent.value?.agentId
+  if (agentId) void router.push(`/agents/${encodeURIComponent(agentId)}/permissions`)
+}
+
+function onAgentManage(): void {
+  showAgentCard.value = false
+  void router.push('/agents')
 }
 
 const items = [
@@ -131,7 +169,9 @@ function onMoreSelect(key: string): void {
 
 async function logout(): Promise<void> {
   showLogout.value = false
-  if (app.accessToken) await logoutSession(app.accessToken).catch(() => undefined)
+  // 登出接口只接受用户 Token，Agent 窗口也使用主会话里的用户 Token
+  const token = app.userAccessToken || app.accessToken
+  if (token) await logoutSession(token).catch(() => undefined)
   agents.$reset()
   app.logout()
   if (hasElectron()) {
@@ -146,23 +186,19 @@ async function logout(): Promise<void> {
   <aside class="flex h-full w-sidebar shrink-0 flex-col items-center bg-sidebar">
     <div class="relative mt-[68px]">
       <button
-        v-tooltip="actingAgent ? '切换身份' : '我的资料'"
+        v-tooltip="actingAgent ? 'Agent 资料' : '我的资料'"
         type="button"
         class="block rounded-md transition-transform hover:scale-105"
         @click="onAvatarClick"
       >
         <Avatar
-          :name="displayName.charAt(0)"
+          :name="displayName"
           :index="displayAvatarIndex"
           :avatar-url="displayAvatarUrl"
           :size="36"
         />
       </button>
-      <IdentitySwitchBadge
-        ref="identityBadge"
-        class="absolute -right-1.5 -bottom-1.5"
-        @toast="showToast"
-      />
+      <IdentitySwitchBadge class="absolute -right-1.5 -bottom-1.5" @toast="showToast" />
     </div>
 
     <nav class="mt-4 flex flex-col items-center gap-8">
@@ -223,6 +259,25 @@ async function logout(): Promise<void> {
       @start-chat="openSelfChat"
       @qr="openSelfQr"
       @settings="onCardSettings"
+    />
+
+    <!-- Agent 身份资料卡 -->
+    <UserCardModal
+      v-if="actingAgent"
+      :visible="showAgentCard"
+      :name="actingAgent.nickname"
+      :desc="actingAgent.signature || 'Agent 账号'"
+      :avatar-index="displayAvatarIndex"
+      :avatar-url="actingAgent.avatarUrl"
+      :account-id="actingAgent.agentId"
+      id-label="Agent ID"
+      id-mono
+      agent
+      :meta="agentCardMeta"
+      @close="showAgentCard = false"
+      @settings="onAgentSettings"
+      @whitelist="onAgentWhitelist"
+      @manage="onAgentManage"
     />
 
     <!-- 我的二维码 -->

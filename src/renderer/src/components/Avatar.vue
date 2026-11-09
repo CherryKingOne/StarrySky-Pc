@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import AppIcon from '@renderer/components/AppIcon.vue'
+import { resolveMediaUrl } from '@renderer/utils/chat'
 
 const props = withDefaults(
   defineProps<{
@@ -21,7 +23,20 @@ const sizeClass = computed(() => {
   if (props.size === 96) return 'h-24 w-24 text-4xl'
   return 'h-9 w-9 text-sm'
 })
-const initial = computed(() => props.name.trim().charAt(0).toUpperCase() || '#')
+const iconSize = computed(() => {
+  if (props.size === 28) return 14
+  if (props.size === 32) return 16
+  if (props.size === 40) return 20
+  if (props.size === 64) return 32
+  if (props.size === 96) return 44
+  return 18
+})
+
+/** 无头像兜底：字母/汉字取首字符；数字、符号等改用通用人像，避免出现无意义字符 */
+const initial = computed(() => {
+  const first = props.name.trim().charAt(0)
+  return first && /[\p{L}]/u.test(first) ? first.toUpperCase() : ''
+})
 
 const failed = ref(false)
 watch(
@@ -30,7 +45,8 @@ watch(
     failed.value = false
   }
 )
-const showImage = computed(() => Boolean(props.avatarUrl) && !failed.value)
+const resolvedUrl = computed(() => resolveMediaUrl(props.avatarUrl) ?? null)
+const showImage = computed(() => Boolean(resolvedUrl.value) && !failed.value)
 </script>
 
 <template>
@@ -40,11 +56,16 @@ const showImage = computed(() => Boolean(props.avatarUrl) && !failed.value)
   >
     <img
       v-if="showImage"
-      :src="avatarUrl ?? ''"
+      :src="resolvedUrl ?? ''"
       :alt="name"
       class="h-full w-full object-cover"
       @error="failed = true"
     />
-    <span v-else class="flex h-full w-full items-center justify-center">{{ initial }}</span>
+    <span v-else-if="initial" class="flex h-full w-full items-center justify-center">
+      {{ initial }}
+    </span>
+    <span v-else class="flex h-full w-full items-center justify-center opacity-80">
+      <AppIcon name="ion:person" :size="iconSize" />
+    </span>
   </div>
 </template>

@@ -28,7 +28,8 @@ const visibleBots = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return directory.value
   return directory.value.filter(
-    (bot) => bot.nickname.toLowerCase().includes(kw) || bot.description.toLowerCase().includes(kw)
+    (bot) =>
+      bot.nickname.toLowerCase().includes(kw) || (bot.description ?? '').toLowerCase().includes(kw)
   )
 })
 
@@ -45,7 +46,7 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     const [all, mine] = await Promise.all([
-      listBotDirectory(token, keyword.value.trim() || undefined, 50),
+      listBotDirectory(token, keyword.value.trim() || undefined),
       listMyBots(token).catch(() => [])
     ])
     directory.value = all

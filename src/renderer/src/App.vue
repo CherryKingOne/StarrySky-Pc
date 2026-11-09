@@ -7,7 +7,7 @@ import { useConversationsStore } from '@renderer/stores/conversations'
 import { wsClient } from '@renderer/api/ws'
 import { setTokenRefresher } from '@renderer/api/http'
 import type { MessageItem } from '@renderer/api/contracts'
-import { isLoginWindow, isPopoutWindow } from '@renderer/utils/window'
+import { isAgentWindow, isLoginWindow, isPopoutWindow } from '@renderer/utils/window'
 
 const REALTIME_CHANNEL = 'starrysky-realtime'
 const app = useAppStore()
@@ -15,6 +15,7 @@ const agents = useAgentsStore()
 const conversations = useConversationsStore()
 const compact = isLoginWindow()
 const popoutWindow = isPopoutWindow()
+const agentWindow = isAgentWindow()
 
 // 登录小窗需要透明背景，才能露出圆角与阴影
 if (compact) document.documentElement.classList.add('login-window')
@@ -31,6 +32,11 @@ let unbindRealtime: (() => void) | undefined
 let unbindStatus: (() => void) | undefined
 let broadcastChannel: BroadcastChannel | undefined
 
+/** 实时事件频道按身份隔离：用户窗口与 Agent 窗口互不串消息 */
+function realtimeChannelName(): string {
+  return `${REALTIME_CHANNEL}:${app.actingAgent?.agentId || 'user'}`
+}
+
 function closeBroadcast(): void {
   broadcastChannel?.close()
   broadcastChannel = undefined
@@ -38,9 +44,11 @@ function closeBroadcast(): void {
 
 function openBroadcast(): BroadcastChannel | undefined {
   if (typeof BroadcastChannel === 'undefined') return undefined
-  broadcastChannel = new BroadcastChannel(REALTIME_CHANNEL)
+  broadcastChannel = new BroadcastChannel(realtimeChannelName())
   return broadcastChannel
 }
+
+let previousToken = ''
 
 watch(
   () => app.accessToken,
@@ -51,8 +59,13 @@ watch(
     unbindStatus = undefined
     closeBroadcast()
 
-    // 独立会话窗口不刷新 Token，避免与主窗口轮换 Token 发生冲突
-    setTokenRefresher(!popoutWindow && token ? () => app.refreshAccessToken() : null)
+    const switched = Boolean(previousToken) && previousToken !== token
+    previousToken = token
+
+    // 独立会话窗口与 Agent 窗口不刷新 Token，避免轮换后使主窗口的 refreshToken 失效
+    setTokenRefresher(
+      !popoutWindow && !agentWindow && token ? () => app.refreshAccessToken() : null
+    )
 
     if (!token) {
       wsClient.disconnect()
@@ -60,8 +73,11 @@ watch(
       return
     }
 
-    // 主窗口启动时加载 Agent 列表并恢复上次视角（独立窗口/登录小窗无需加载）
-    if (!compact && !popoutWindow) void agents.init()
+    // 身份发生变化时先清空旧身份的会话与选中态，避免旧数据残留造成“切了却没变”
+    if (switched) conversations.reset()
+
+    // 主窗口启动时加载 Agent 列表；Agent 独立窗口的身份已在挂载前初始化
+    if (!compact && !popoutWindow && !agentWindow) void agents.init()
 
     void conversations.load(true).catch(() => undefined)
 

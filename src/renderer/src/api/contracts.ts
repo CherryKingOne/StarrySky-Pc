@@ -17,10 +17,24 @@ export interface UpdateProfilePayload {
   signature?: string
 }
 
+/** Agent 摘要，会话与好友响应中的 agent 字段 */
+export interface AgentSummary {
+  agentId: string
+  nickname: string
+  avatarUrl: string | null
+  gender: number
+  signature: string | null
+  status: 'ACTIVE' | 'DISABLED'
+}
+
+export type FriendTargetType = 'USER' | 'AGENT'
+
 export interface FriendEntry {
+  targetType: FriendTargetType
   userId: string
   remark: string | null
   profile: ApiUser | null
+  agent: AgentSummary | null
   createdAt: string
 }
 
@@ -50,13 +64,14 @@ export interface OnlineStatus {
   online: boolean
 }
 
-export type ConversationTargetType = 'USER' | 'BOT' | 'GROUP'
+export type ConversationTargetType = 'USER' | 'BOT' | 'AGENT' | 'GROUP'
 
 export interface BotSummary {
   botId: string
   nickname: string
   avatarUrl: string | null
-  description: string
+  /** 目录接口固定返回文本；会话内的机器人摘要可能为 null */
+  description: string | null
   status: 'ACTIVE' | 'DISABLED'
 }
 
@@ -96,6 +111,8 @@ export interface ConversationItem {
   targetId: string
   target: ApiUser | null
   bot: BotSummary | null
+  /** Agent 会话的 Agent 摘要；仅 targetType=AGENT 时返回 */
+  agent: AgentSummary | null
   unreadCount: number
   lastReadSeq: string
   pinned: boolean

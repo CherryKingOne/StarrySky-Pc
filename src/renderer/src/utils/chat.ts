@@ -93,6 +93,7 @@ export function mapConversation(item: ConversationItem): Conversation {
   const name =
     item.title ||
     item.bot?.nickname ||
+    item.agent?.nickname ||
     item.target?.nickname ||
     item.target?.username ||
     (item.type === 2 ? '群聊' : '会话')
@@ -100,7 +101,7 @@ export function mapConversation(item: ConversationItem): Conversation {
     id: item.conversationId,
     name,
     avatarIndex: avatarIndexOf(name),
-    avatarUrl: item.bot?.avatarUrl ?? item.target?.avatarUrl ?? null,
+    avatarUrl: item.bot?.avatarUrl ?? item.agent?.avatarUrl ?? item.target?.avatarUrl ?? null,
     preview: item.lastMessagePreview ?? '',
     time: formatListTime(item.lastMessageAt) || (item.lastMessageAt ? '' : ''),
     unread: item.unreadCount ?? 0,
@@ -108,10 +109,11 @@ export function mapConversation(item: ConversationItem): Conversation {
     muted: item.muted,
     group: item.type === 2,
     targetType: item.targetType,
-    targetUserId: item.target?.userId ?? item.bot?.botId,
+    targetUserId: item.target?.userId ?? item.bot?.botId ?? item.agent?.agentId,
     targetUsername: item.target?.username,
-    targetSignature: item.target?.signature,
+    targetSignature: item.target?.signature ?? item.agent?.signature,
     bot: item.bot ?? undefined,
+    agent: item.agent ?? undefined,
     messages: [],
     loaded: false,
     hasMore: false,

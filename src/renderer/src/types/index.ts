@@ -68,8 +68,8 @@ export interface Conversation {
   myRole?: number
   members?: MemberInfo[]
   messages: ChatMessage[]
-  /** 会话对端类型：真人、机器人或群聊 */
-  targetType?: 'USER' | 'BOT' | 'GROUP'
+  /** 会话对端类型：真人、机器人、Agent 或群聊 */
+  targetType?: 'USER' | 'BOT' | 'AGENT' | 'GROUP'
   targetUserId?: string
   targetUsername?: string
   targetSignature?: string | null
@@ -77,7 +77,15 @@ export interface Conversation {
     botId: string
     nickname: string
     avatarUrl: string | null
-    description: string
+    description: string | null
+    status: 'ACTIVE' | 'DISABLED'
+  }
+  agent?: {
+    agentId: string
+    nickname: string
+    avatarUrl: string | null
+    gender: number
+    signature: string | null
     status: 'ACTIVE' | 'DISABLED'
   }
   /** 历史消息是否已加载 */

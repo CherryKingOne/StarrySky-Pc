@@ -7,7 +7,7 @@ import { listMyBots } from '@renderer/api/bots'
 import { getUsersBatch } from '@renderer/api/users'
 import { uploadFile } from '@renderer/api/files'
 import { wsClient } from '@renderer/api/ws'
-import type { MessageContentType, MessageItem } from '@renderer/api/contracts'
+import type { ConversationItem, MessageContentType, MessageItem } from '@renderer/api/contracts'
 import { useAppStore } from '@renderer/stores/app'
 import {
   avatarIndexOf,
@@ -34,9 +34,15 @@ interface SearchResult {
 
 const HIDDEN_CONVERSATIONS_KEY = 'starrysky-hidden-conversations'
 
+/** 用户身份与每个 Agent 身份各自维护「不显示」列表，避免互相污染 */
+function hiddenKey(): string {
+  const agentId = useAppStore().actingAgent?.agentId
+  return `${HIDDEN_CONVERSATIONS_KEY}:${agentId || 'user'}`
+}
+
 function readHiddenIds(): string[] {
   try {
-    const raw = localStorage.getItem(HIDDEN_CONVERSATIONS_KEY)
+    const raw = localStorage.getItem(hiddenKey())
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
     return []
@@ -45,7 +51,7 @@ function readHiddenIds(): string[] {
 
 function writeHiddenIds(ids: string[]): void {
   try {
-    localStorage.setItem(HIDDEN_CONVERSATIONS_KEY, JSON.stringify(ids))
+    localStorage.setItem(hiddenKey(), JSON.stringify(ids))
   } catch {
     /* 隐私模式下忽略持久化失败 */
   }
@@ -58,7 +64,7 @@ function localId(prefix: string): string {
 }
 
 /** 会话列表加载中的共享任务，允许多个窗口等待同一次加载完成 */
-let loadTask: Promise<void> | null = null
+let loadTask: { token: string; promise: Promise<void> } | null = null
 
 function emptyConversation(): Conversation[] {
   return []
@@ -128,14 +134,28 @@ export const useConversationsStore = defineStore('conversations', {
       const token = useAppStore().accessToken
       if (!token) return
       if (loadTask) {
-        await loadTask
-        return
+        // 同一身份的加载直接复用；身份已变化时先等旧任务结束，再用新 token 重新加载
+        if (loadTask.token === token) {
+          await loadTask.promise
+          return
+        }
+        await loadTask.promise.catch(() => undefined)
       }
       if (this.loaded && !force) return
       this.loading = true
-      loadTask = (async () => {
+      const task = (async () => {
         try {
-          const items = await conversationApi.listConversations(token, 100, 0)
+          // 服务端单页固定 50 条，按 offset 拉取全部会话
+          const items: ConversationItem[] = []
+          let offset = 0
+          while (true) {
+            const page = await conversationApi.listConversations(token, offset)
+            items.push(...page)
+            if (page.length < conversationApi.CONVERSATION_PAGE_SIZE) break
+            offset += conversationApi.CONVERSATION_PAGE_SIZE
+          }
+          // 加载期间身份已切换：丢弃旧身份的结果，避免覆盖新身份的会话
+          if (useAppStore().accessToken !== token) return
           const previousActive = this.activeId
           const incoming = items
             .map(mapConversation)
@@ -162,16 +182,20 @@ export const useConversationsStore = defineStore('conversations', {
           }
           if (!this.ownedBotsSynced) {
             this.ownedBotsSynced = true
-            void this.syncOwnedBots().catch(() => undefined)
+            // 机器人管理接口只接受用户 Token，Agent 身份下跳过
+            if (!useAppStore().actingAgent) {
+              void this.syncOwnedBots().catch(() => undefined)
+            }
           }
         } finally {
           this.loading = false
         }
       })()
+      loadTask = { token, promise: task }
       try {
-        await loadTask
+        await task
       } finally {
-        loadTask = null
+        if (loadTask?.promise === task) loadTask = null
       }
     },
 
@@ -237,7 +261,7 @@ export const useConversationsStore = defineStore('conversations', {
       if (!token || !conversation || this.loadingHistory[id]) return
       this.loadingHistory[id] = true
       try {
-        const items = await messageApi.getMessageHistory(token, id, beforeId, 50)
+        const items = await messageApi.getMessageHistory(token, id, beforeId)
         await this.ensureProfiles(items)
         const mapped = items
           .slice()
@@ -253,7 +277,7 @@ export const useConversationsStore = defineStore('conversations', {
           (message, index, all) => all.findIndex((item) => item.id === message.id) === index
         )
         conversation.loaded = true
-        conversation.hasMore = items.length >= 50
+        conversation.hasMore = items.length >= messageApi.MESSAGE_HISTORY_PAGE_SIZE
       } finally {
         this.loadingHistory[id] = false
       }
@@ -268,7 +292,7 @@ export const useConversationsStore = defineStore('conversations', {
 
     /**
      * 历史消息页专用：翻页拉取指定会话的全部历史，
-     * 以便按日期统计哪些天有消息。单次最多 40 页（约 2000 条）。
+     * 以便按日期统计哪些天有消息。服务端每页固定 20 条，单次最多 40 页（约 800 条）。
      */
     async loadAllHistory(id: string, maxPages = 40): Promise<void> {
       const conversation = this.list.find((item) => item.id === id)
@@ -280,9 +304,7 @@ export const useConversationsStore = defineStore('conversations', {
         if (!first) break
         const before = first.id
         await this.loadHistory(id, before)
-        const nextFirst = conversation.messages.find(
-          (message) => !message.id.startsWith('local-')
-        )
+        const nextFirst = conversation.messages.find((message) => !message.id.startsWith('local-'))
         if (!nextFirst || nextFirst.id === before) break
         pages += 1
       }
@@ -392,9 +414,10 @@ export const useConversationsStore = defineStore('conversations', {
       return item.conversationId
     },
 
-    /** 打开与自己的会话（文件传输/备忘） */
+    /** 打开与自己的会话（文件传输/备忘）；Agent 身份下以自己的 Agent ID 为准 */
     async openWithSelf(): Promise<string> {
-      const me = useAppStore().user?.userId
+      const app = useAppStore()
+      const me = app.actingAgent?.agentId ?? app.user?.userId
       if (!me) throw new ApiError(10100, '未登录')
       return this.openWithUser(me)
     },
@@ -709,27 +732,22 @@ export const useConversationsStore = defineStore('conversations', {
       return results
     },
 
-    /** 搜索前预拉所有会话的最近历史 */
-    async prefetchHistories(limit = 50): Promise<void> {
+    /** 搜索前预拉所有会话的最近一页历史（服务端固定 20 条） */
+    async prefetchHistories(): Promise<void> {
       const token = useAppStore().accessToken
       if (!token) return
       const pending = this.list.filter((conversation) => !conversation.loaded)
       await Promise.all(
         pending.map(async (conversation) => {
           try {
-            const items = await messageApi.getMessageHistory(
-              token,
-              conversation.id,
-              undefined,
-              limit
-            )
+            const items = await messageApi.getMessageHistory(token, conversation.id)
             await this.ensureProfiles(items)
             conversation.messages = items
               .slice()
               .reverse()
               .map((item) => this.mapItem(item, conversation))
             conversation.loaded = true
-            conversation.hasMore = items.length >= limit
+            conversation.hasMore = items.length >= messageApi.MESSAGE_HISTORY_PAGE_SIZE
           } catch {
             /* 单个会话失败不影响其它会话 */
           }
@@ -858,7 +876,8 @@ export const useConversationsStore = defineStore('conversations', {
     async ensureProfiles(items: MessageItem[]): Promise<void> {
       const token = useAppStore().accessToken
       if (!token) return
-      const me = useAppStore().user?.userId
+      const app = useAppStore()
+      const me = app.actingAgent?.agentId ?? app.user?.userId
       const missing = new Set<string>()
       for (const item of items) {
         if (item.senderId === me) continue
@@ -883,7 +902,9 @@ export const useConversationsStore = defineStore('conversations', {
     },
 
     mapItem(item: MessageItem, conversation: Conversation): ChatMessage {
-      const me = useAppStore().user?.userId ?? ''
+      const app = useAppStore()
+      // 会话方向必须按「当前生效身份」判断：Agent 身份下自己发出的消息 senderId 是 agentId
+      const me = app.actingAgent?.agentId ?? app.user?.userId ?? ''
       return mapMessage(item, {
         userId: me,
         senderName: (senderId) => {

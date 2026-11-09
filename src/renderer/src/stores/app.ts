@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { AuthSession, AuthUser, TokenPair } from '@renderer/api/auth'
 import { refreshSession } from '@renderer/api/auth'
-import { exchangeAgentToken, type AgentItem } from '@renderer/api/agents'
+import { exchangeAgentToken, getAgent, type AgentItem } from '@renderer/api/agents'
 import { setTokenRefresher } from '@renderer/api/http'
 
 export type Theme = 'light' | 'dark'
@@ -120,7 +120,8 @@ export const useAppStore = defineStore('app', {
       writeStored(
         SESSION_KEY,
         JSON.stringify({
-          accessToken: this.accessToken,
+          // 会话里始终保存用户 Token，避免 Agent 窗口把短期令牌写回主会话
+          accessToken: this.userAccessToken || this.accessToken,
           refreshToken: this.refreshToken,
           tokenType: 'Bearer',
           expiresIn: 7200,
@@ -164,6 +165,28 @@ export const useAppStore = defineStore('app', {
       this.actingAgent = agent
       this.agentAccessToken = token
       if (token) this.accessToken = token
+    },
+
+    /**
+     * Agent 独立主窗口启动时调用：用主会话里的用户 Token 换取 Agent 令牌。
+     * 不写 localStorage，避免影响用户主窗口下次启动时的身份。
+     */
+    async enterAgentWindow(agentId: string): Promise<boolean> {
+      const token = this.userAccessToken || readSession()?.accessToken || ''
+      if (!token) return false
+      this.userAccessToken = token
+      this.accessToken = token
+      try {
+        const agent = await getAgent(token, agentId)
+        if (agent.status !== 'ACTIVE') return false
+        const agentToken = await exchangeAgentToken(token, agent.agentId)
+        this.beginAgentSession(agent, agentToken.accessToken)
+        this.authenticated = true
+        this.locked = false
+        return true
+      } catch {
+        return false
+      }
     },
 
     /** 切回用户账号，丢弃 Agent Token */

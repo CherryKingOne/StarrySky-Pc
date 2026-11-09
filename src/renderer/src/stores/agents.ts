@@ -11,7 +11,6 @@ import { ApiError } from '@renderer/api/http'
 import { useAppStore } from '@renderer/stores/app'
 
 /** 当前选中的 Agent 身份（空串表示用户账号） */
-const IDENTITY_KEY = 'starrysky-agent-identity'
 /** 后端不可用时的本地示例 Agent 列表 */
 const DEMO_KEY = 'starrysky-agents-demo'
 export const AGENT_LIMIT = 5
@@ -177,14 +176,8 @@ export const useAgentsStore = defineStore('agents', {
     async init(): Promise<void> {
       if (initialized) return
       initialized = true
+      // 主窗口始终以用户身份运行，Agent 身份由独立窗口承载，不再恢复旧视角
       await this.load()
-      const saved = readStored(IDENTITY_KEY)
-      if (
-        saved &&
-        this.list.some((agent) => agent.agentId === saved && agent.status === 'ACTIVE')
-      ) {
-        await this.switchToAgent(saved).catch(() => undefined)
-      }
     },
 
     async load(force = false): Promise<void> {
@@ -214,7 +207,6 @@ export const useAgentsStore = defineStore('agents', {
     switchToUser(): void {
       const app = useAppStore()
       if (app.actingAgent) app.endAgentSession()
-      writeStored(IDENTITY_KEY, '')
     },
 
     /** 切换到某个 Agent；后端不可用时降级为本地身份，仅改变界面标识 */
@@ -232,7 +224,6 @@ export const useAgentsStore = defineStore('agents', {
           const token = await agentApi.exchangeAgentToken(this.userToken(), agentId)
           app.beginAgentSession(agent, token.accessToken)
         }
-        writeStored(IDENTITY_KEY, agentId)
       } finally {
         this.switching = ''
       }
@@ -261,6 +252,13 @@ export const useAgentsStore = defineStore('agents', {
       return agent
     },
 
+    /** 同步某个 Agent 的最新资料：列表与当前身份都更新 */
+    applyAgent(agent: AgentItem): void {
+      this.list = this.list.map((item) => (item.agentId === agent.agentId ? agent : item))
+      const app = useAppStore()
+      if (app.actingAgent?.agentId === agent.agentId) app.actingAgent = agent
+    },
+
     async update(agentId: string, payload: UpdateAgentPayload): Promise<AgentItem> {
       if (this.demo) {
         const current = this.list.find((item) => item.agentId === agentId)
@@ -278,9 +276,7 @@ export const useAgentsStore = defineStore('agents', {
         return next
       }
       const agent = await agentApi.updateAgent(this.userToken(), agentId, payload)
-      this.list = this.list.map((item) => (item.agentId === agentId ? agent : item))
-      const app = useAppStore()
-      if (app.actingAgent?.agentId === agentId) app.actingAgent = agent
+      this.applyAgent(agent)
       return agent
     },
 
@@ -294,16 +290,10 @@ export const useAgentsStore = defineStore('agents', {
         const next = { ...current, status, updatedAt: localStamp() }
         this.list = this.list.map((item) => (item.agentId === agentId ? next : item))
         writeDemoAgents(this.list)
-        if (status === 'DISABLED' && useAppStore().actingAgent?.agentId === agentId) {
-          this.switchToUser()
-        }
         return
       }
       const agent = await agentApi.updateAgentStatus(this.userToken(), agentId, status)
       this.list = this.list.map((item) => (item.agentId === agentId ? agent : item))
-      if (status === 'DISABLED' && useAppStore().actingAgent?.agentId === agentId) {
-        this.switchToUser()
-      }
     },
 
     async remove(agentId: string): Promise<void> {
@@ -314,7 +304,6 @@ export const useAgentsStore = defineStore('agents', {
         await agentApi.deleteAgent(this.userToken(), agentId)
         this.list = this.list.filter((item) => item.agentId !== agentId)
       }
-      if (useAppStore().actingAgent?.agentId === agentId) this.switchToUser()
     },
 
     async loadPermissions(agentId: string, force = false): Promise<void> {

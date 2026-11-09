@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{ modelValue?: boolean }>(), { modelValue: false })
+const props = withDefaults(defineProps<{ modelValue?: boolean; disabled?: boolean }>(), {
+  modelValue: false,
+  disabled: false
+})
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const checked = computed(() => props.modelValue)
 
 function toggle(): void {
+  if (props.disabled) return
   emit('update:modelValue', !checked.value)
 }
 </script>
@@ -16,8 +20,12 @@ function toggle(): void {
     type="button"
     role="switch"
     :aria-checked="checked"
+    :disabled="disabled"
     class="relative h-5 w-10 shrink-0 rounded-full transition-colors"
-    :class="checked ? 'bg-accent' : 'bg-item-top'"
+    :class="[
+      checked ? 'bg-accent' : 'bg-item-top',
+      disabled ? 'cursor-not-allowed opacity-50' : ''
+    ]"
     @click.stop="toggle"
   >
     <span
