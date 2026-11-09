@@ -116,7 +116,7 @@ function remove(): void {
 
 function transfer(): void {
   const member = selectedMember.value
-  if (!member?.userId || member.userId === meId.value) return
+  if (!member?.userId || member.userId === meId.value || member.targetType === 'AGENT') return
   void run(
     () => store.transferGroupOwner(props.conversationId, member.userId!),
     `已将群主转让给 ${member.name}`
@@ -207,9 +207,14 @@ function disband(): void {
               :avatar-url="friend.avatarUrl"
               :size="32"
             />
-            <span class="min-w-0 flex-1 truncate text-small text-foreground">{{
-              friend.name
-            }}</span>
+            <span class="min-w-0 flex-1 truncate text-small text-foreground">
+              {{ friend.name
+              }}<span
+                v-if="friend.targetType === 'AGENT'"
+                class="ml-1 text-micro text-tertiary-foreground"
+                >Agent</span
+              >
+            </span>
             <span
               class="flex h-4 w-4 items-center justify-center rounded-sm border text-[10px]"
               :class="
@@ -253,9 +258,17 @@ function disband(): void {
           "
           @click="selectMember(member)"
         >
-          <Avatar :name="member.name" :index="member.index" :size="36" />
+          <Avatar
+            :name="member.name"
+            :index="member.index"
+            :avatar-url="member.avatarUrl"
+            :size="36"
+          />
           <span class="max-w-full truncate text-micro text-foreground">{{ member.name }}</span>
-          <span class="text-[10px] text-tertiary-foreground">{{ member.role || '成员' }}</span>
+          <span class="text-[10px] text-tertiary-foreground">
+            {{ member.role || '成员'
+            }}<template v-if="member.targetType === 'AGENT'"> · Agent</template>
+          </span>
         </button>
       </div>
 
@@ -283,7 +296,7 @@ function disband(): void {
           禁言 10 分钟
         </button>
         <button
-          v-if="isOwner && selectedMember.userId !== meId"
+          v-if="isOwner && selectedMember.userId !== meId && selectedMember.targetType !== 'AGENT'"
           type="button"
           class="h-7 rounded-sm border border-border bg-input px-2 text-micro text-foreground hover:bg-panel"
           @click="transfer"

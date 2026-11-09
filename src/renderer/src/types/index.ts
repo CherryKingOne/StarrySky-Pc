@@ -49,6 +49,9 @@ export interface MemberInfo {
   name: string
   index: number
   role?: '群主' | '管理员' | '成员'
+  avatarUrl?: string | null
+  /** 群成员类型；Agent 成员的 userId 是 agentId，不能被转让群主 */
+  targetType?: 'USER' | 'AGENT'
 }
 
 export interface Conversation {
@@ -99,8 +102,10 @@ export interface Conversation {
 
 export interface ContactEntry {
   id: string
-  /** 真实用户 ID，来自好友/搜索结果 */
+  /** 真实用户 ID 或 Agent ID，来自好友/搜索结果 */
   userId?: string
+  /** 好友对端类型；Agent 好友的 userId 字段实际是 agentId */
+  targetType?: 'USER' | 'AGENT'
   name: string
   avatarIndex: number
   avatarUrl?: string | null

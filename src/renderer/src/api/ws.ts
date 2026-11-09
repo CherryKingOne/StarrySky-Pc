@@ -13,6 +13,25 @@ export interface WsFrame<T = unknown> {
 export type WsHandler<T = unknown> = (data: T, frame: WsFrame<T>) => void
 export type WsStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed'
 
+/** 连接成功后服务端下发的 system.connected 帧数据 */
+export interface SystemConnectedData {
+  /** 连接主体 ID：用户为 userId，Agent 为 agentId，机器人为 botId */
+  userId: string
+  /** 本次登录会话 ID，同一会话的多条连接共用一个 sessionId */
+  sessionId: string
+  serverTime: number
+  /** 服务端 WebSocket Ping 间隔秒数；0 或负数表示服务端不主动 Ping */
+  heartbeatIntervalSeconds: number
+}
+
+/** typing.received 下行帧数据 */
+export interface TypingReceivedData {
+  conversationId: string
+  userId: string
+  /** 会话类型：1=单聊，2=群聊 */
+  type?: number
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void
   reject: (reason: ApiError) => void
@@ -44,9 +63,18 @@ class WsClient {
   private reconnectAttempts = 0
   private manualClose = false
   private currentStatus: WsStatus = 'idle'
+  private connectedInfo: SystemConnectedData | null = null
+  private connectedHandlers = new Set<(info: SystemConnectedData) => void>()
+  /** 应用层心跳间隔，默认 30 秒，可按 system.connected 的返回值调整 */
+  private heartbeatIntervalMs = 30000
 
   get status(): WsStatus {
     return this.currentStatus
+  }
+
+  /** 最近一次 system.connected 帧的信息；未连接时为 null */
+  get connection(): SystemConnectedData | null {
+    return this.connectedInfo
   }
 
   isConnected(): boolean {
@@ -96,6 +124,13 @@ class WsClient {
     return () => this.statusHandlers.delete(handler)
   }
 
+  /** 订阅 system.connected：用于获知连接主体 ID、sessionId 与服务端心跳间隔 */
+  onConnected(handler: (info: SystemConnectedData) => void): () => void {
+    this.connectedHandlers.add(handler)
+    if (this.connectedInfo) handler(this.connectedInfo)
+    return () => this.connectedHandlers.delete(handler)
+  }
+
   /** 发送请求并等待同 id 的应答；未连接时立即失败，由调用方降级到 HTTP */
   send<T = unknown>(command: string, data: unknown, timeout = 10000): Promise<T> {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -141,6 +176,7 @@ class WsClient {
     socket.onopen = () => {
       if (this.socket !== socket) return
       this.reconnectAttempts = 0
+      this.connectedInfo = null
       this.clearReconnectTimer()
       this.setStatus('connected')
       this.startHeartbeat()
@@ -160,6 +196,7 @@ class WsClient {
     socket.onclose = () => {
       if (this.socket !== socket) return
       this.socket = null
+      this.connectedInfo = null
       this.stopHeartbeat()
       this.rejectAll('WebSocket 连接已断开')
       if (this.manualClose) {
@@ -197,6 +234,11 @@ class WsClient {
   }
 
   private dispatch(frame: WsFrame): void {
+    // 连接成功帧：更新连接主体信息，并按服务端建议调整应用层心跳间隔
+    if (frame.command === 'system.connected') {
+      this.applyConnected(frame.data as SystemConnectedData)
+      return
+    }
     if (frame.id) {
       const pending = this.pending.get(frame.id)
       if (pending) {
@@ -224,7 +266,23 @@ class WsClient {
     this.heartbeatTimer = window.setInterval(() => {
       if (!this.isConnected()) return
       this.send('heartbeat.ping', {}, 8000).catch(() => undefined)
-    }, 30000)
+    }, this.heartbeatIntervalMs)
+  }
+
+  private applyConnected(info: SystemConnectedData): void {
+    if (!info) return
+    this.connectedInfo = info
+    const seconds = Number(info.heartbeatIntervalSeconds)
+    // 服务端主动 Ping 间隔建议作为应用层心跳周期；0/负数时回退 30 秒
+    this.heartbeatIntervalMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 30000
+    if (this.currentStatus === 'connected') this.startHeartbeat()
+    for (const handler of this.connectedHandlers) {
+      try {
+        handler(info)
+      } catch {
+        /* 连接信息监听失败不影响连接 */
+      }
+    }
   }
 
   private stopHeartbeat(): void {

@@ -6,7 +6,7 @@ import * as messageApi from '@renderer/api/messages'
 import { listMyBots } from '@renderer/api/bots'
 import { getUsersBatch } from '@renderer/api/users'
 import { uploadFile } from '@renderer/api/files'
-import { wsClient } from '@renderer/api/ws'
+import { wsClient, type TypingReceivedData } from '@renderer/api/ws'
 import type { ConversationItem, MessageContentType, MessageItem } from '@renderer/api/contracts'
 import { useAppStore } from '@renderer/stores/app'
 import {
@@ -404,11 +404,11 @@ export const useConversationsStore = defineStore('conversations', {
       target.preview = '暂无消息'
     },
 
-    /** 打开与某个真人用户的单聊 */
-    async openWithUser(userId: string): Promise<string> {
+    /** 打开与某个用户 / Agent 的单聊（targetId 为 userId 或 agentId） */
+    async openWithUser(targetId: string): Promise<string> {
       const token = useAppStore().accessToken
       if (!token) throw new ApiError(10100, '未登录')
-      const item = await conversationApi.createConversation(token, userId)
+      const item = await conversationApi.createConversation(token, targetId)
       this.upsertConversation(item)
       await this.setActive(item.conversationId)
       return item.conversationId
@@ -475,12 +475,29 @@ export const useConversationsStore = defineStore('conversations', {
         conversation.notice = detail.notice ?? '暂无群公告'
         conversation.owner = detail.owner?.nickname ?? ''
         conversation.myRole = detail.myRole
-        conversation.members = members.map((member, index) => ({
-          userId: member.userId,
-          name: member.profile?.nickname ?? `成员${index + 1}`,
-          index: avatarIndexOf(member.profile?.nickname ?? ''),
-          role: member.role === 2 ? '群主' : member.role === 1 ? '管理员' : '成员'
-        })) as MemberInfo[]
+        conversation.members = members.map((member, index) => {
+          // Agent 成员没有 profile，资料来自 agent 摘要；userId 字段实际是 agentId
+          const nickname = member.agent?.nickname ?? member.profile?.nickname
+          const avatarUrl = member.agent?.avatarUrl ?? member.profile?.avatarUrl ?? null
+          return {
+            userId: member.userId,
+            name: nickname ?? `成员${index + 1}`,
+            index: avatarIndexOf(nickname ?? ''),
+            avatarUrl,
+            targetType: member.agent ? 'AGENT' : 'USER',
+            role: member.role === 2 ? '群主' : member.role === 1 ? '管理员' : '成员'
+          } as MemberInfo
+        })
+        // 群成员资料直接预填缓存：users/batch 查不到 Agent，群消息发送者昵称/头像依赖这里
+        for (const member of members) {
+          const nickname = member.agent?.nickname ?? member.profile?.nickname
+          if (!nickname) continue
+          this.profiles[member.userId] = {
+            nickname,
+            username: member.profile?.username ?? member.userId,
+            avatarUrl: member.agent?.avatarUrl ?? member.profile?.avatarUrl ?? null
+          }
+        }
       } catch {
         /* 群资料加载失败不阻塞聊天 */
       }
@@ -498,7 +515,7 @@ export const useConversationsStore = defineStore('conversations', {
       await this.deliver(conversationId, 1, text.trim())
     },
 
-    /** 发送任意 content */
+    /** 发送任意 content；contentType 2-8 时 content 必须是包含 url 字段的 JSON 字符串 */
     async sendContent(id: string, contentType: number, content: string): Promise<void> {
       await this.deliver(id, contentType, content)
     },
@@ -546,9 +563,19 @@ export const useConversationsStore = defineStore('conversations', {
       )
     },
 
-    /** 发送名片（contentType=7） */
+    /** 发送名片（contentType=7）；非文本消息的 content 必须包含 url 字段 */
     async sendCard(id: string, name: string, desc: string, subtitle = '个人名片'): Promise<void> {
-      await this.deliver(id, 7, JSON.stringify({ title: name, subtitle, desc, icon: 'ion:person' }))
+      await this.deliver(
+        id,
+        7,
+        JSON.stringify({
+          url: 'starrysky://card',
+          title: name,
+          subtitle,
+          desc,
+          icon: 'ion:person'
+        })
+      )
     },
 
     /** 投票后端暂未提供，仅本地演示 */
@@ -777,13 +804,10 @@ export const useConversationsStore = defineStore('conversations', {
         this.applyRecall(data)
         forward?.('message.recalled', data)
       })
-      const offTyping = wsClient.on<{ conversationId: string; userId: string }>(
-        'typing.received',
-        (data) => {
-          this.receiveTyping(data.conversationId)
-          forward?.('typing.received', data)
-        }
-      )
+      const offTyping = wsClient.on<TypingReceivedData>('typing.received', (data) => {
+        this.receiveTyping(data.conversationId)
+        forward?.('typing.received', data)
+      })
       return () => {
         offNew()
         offSync()
@@ -884,6 +908,7 @@ export const useConversationsStore = defineStore('conversations', {
         if (this.profiles[item.senderId]) continue
         const conversation = this.list.find((entry) => entry.id === item.conversationId)
         if (conversation?.bot?.botId === item.senderId) continue
+        if (conversation?.agent?.agentId === item.senderId) continue
         missing.add(item.senderId)
       }
       if (missing.size === 0) return

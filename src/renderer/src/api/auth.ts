@@ -29,6 +29,29 @@ function devicePayload(): { deviceType: 'PC' } {
   return { deviceType: 'PC' }
 }
 
+/** 用户名 + 密码登录（兼容旧接口；手机/邮箱注册的账号 username 为 u{userId}，一般不用） */
+export function loginWithUsername(payload: {
+  username: string
+  password: string
+}): Promise<AuthSession> {
+  return apiRequest<AuthSession>('/auth/login', {
+    method: 'POST',
+    body: { ...payload, ...devicePayload() }
+  })
+}
+
+/** 用户名 + 密码注册（兼容旧接口） */
+export function registerWithUsername(payload: {
+  username: string
+  password: string
+  nickname?: string
+}): Promise<AuthSession> {
+  return apiRequest<AuthSession>('/auth/register', {
+    method: 'POST',
+    body: { ...payload, ...devicePayload() }
+  })
+}
+
 /** 手机号 + 密码 或 手机号 + 验证码，二选一 */
 export function loginWithPhone(payload: {
   phone: string

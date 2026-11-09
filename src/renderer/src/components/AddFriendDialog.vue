@@ -5,6 +5,7 @@ import Avatar from '@renderer/components/Avatar.vue'
 import PopupDialog from '@renderer/components/PopupDialog.vue'
 import { useContactsStore } from '@renderer/stores/contacts'
 import { useAppStore } from '@renderer/stores/app'
+import { avatarIndexOf } from '@renderer/utils/chat'
 import type { ContactEntry } from '@renderer/types'
 
 const props = defineProps<{ visible: boolean }>()
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   close: []
   sent: [name: string]
   selfChat: []
+  startChat: [entry: ContactEntry]
   toast: [message: string]
 }>()
 
@@ -45,13 +47,36 @@ const isFriend = computed(() =>
   Boolean(selected.value?.userId && contacts.friendUserIds.has(selected.value.userId))
 )
 
+/** 当前生效身份的展示信息：Agent 窗口里 app.user 仍是归属者，不能用它判断「自己」 */
+const actingIdentity = computed(() => {
+  const agent = app.actingAgent
+  if (agent) {
+    return {
+      name: agent.nickname,
+      index: avatarIndexOf(agent.nickname),
+      avatarUrl: agent.avatarUrl,
+      isAgent: true
+    }
+  }
+  return {
+    name: app.nickname || '我',
+    index: app.avatarIndex,
+    avatarUrl: app.user?.avatarUrl ?? null,
+    isAgent: false
+  }
+})
+
 const isSelfKeyword = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return false
-  const selfValues = [app.user?.userId, app.user?.username, app.phone]
+  // 身份不同，自己的标识也不同：Agent 身份只认 agentId，用户身份认 userId/账号/登录名
+  const selfValues = app.actingAgent
+    ? [app.actingAgent.agentId]
+    : [app.user?.userId, app.user?.username, app.phone]
+  return selfValues
     .filter(Boolean)
     .map((value) => String(value).toLowerCase())
-  return selfValues.includes(kw)
+    .includes(kw)
 })
 
 async function search(): Promise<void> {
@@ -107,6 +132,13 @@ function startSelfChat(): void {
   emit('selfChat')
   emit('close')
 }
+
+/** 已是好友的搜索结果直接进入聊天，不再要求重复发申请 */
+function startChat(): void {
+  if (!selected.value?.userId) return
+  emit('startChat', selected.value)
+  emit('close')
+}
 </script>
 
 <template>
@@ -134,13 +166,15 @@ function startSelfChat(): void {
     <div v-if="selfMatched" class="mt-4 rounded-md border border-border-soft bg-panel p-3">
       <div class="flex items-center gap-3">
         <Avatar
-          :name="app.nickname || '我'"
-          :index="app.avatarIndex"
-          :avatar-url="app.user?.avatarUrl"
+          :name="actingIdentity.name"
+          :index="actingIdentity.index"
+          :avatar-url="actingIdentity.avatarUrl"
           :size="40"
         />
         <div class="min-w-0 flex-1">
-          <p class="text-label text-foreground">这是你自己</p>
+          <p class="text-label text-foreground">
+            {{ actingIdentity.isAgent ? '这是当前 Agent 自己' : '这是你自己' }}
+          </p>
           <p class="mt-0.5 text-micro text-secondary-foreground">
             不能添加自己为好友，但可以给自己发消息作为备忘或文件传输。
           </p>
@@ -207,7 +241,7 @@ function startSelfChat(): void {
     </p>
 
     <textarea
-      v-if="selected"
+      v-if="selected && !isFriend"
       v-model="message"
       rows="2"
       class="app-field mt-3 w-full resize-none px-2 py-1.5 text-small"
@@ -223,9 +257,18 @@ function startSelfChat(): void {
         取消
       </button>
       <button
+        v-if="selected && isFriend"
+        type="button"
+        class="btn-primary h-9 px-4"
+        @click="startChat"
+      >
+        发消息
+      </button>
+      <button
+        v-else
         type="button"
         class="btn-primary h-9 px-4 disabled:opacity-50"
-        :disabled="!selected || isFriend"
+        :disabled="!selected"
         @click="send"
       >
         发送申请

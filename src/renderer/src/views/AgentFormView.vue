@@ -6,6 +6,8 @@ import Avatar from '@renderer/components/Avatar.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { useAgentsStore, AGENT_LIMIT } from '@renderer/stores/agents'
 import { useAppStore } from '@renderer/stores/app'
+import { useContactsStore } from '@renderer/stores/contacts'
+import { useConversationsStore } from '@renderer/stores/conversations'
 import { getAgent, type AgentItem } from '@renderer/api/agents'
 import { uploadFile } from '@renderer/api/files'
 import { avatarIndexOf } from '@renderer/utils/chat'
@@ -14,6 +16,8 @@ const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
 const agents = useAgentsStore()
+const contacts = useContactsStore()
+const conversations = useConversationsStore()
 
 const agentId = computed(() => String(route.params.agentId ?? ''))
 const isEdit = computed(() => route.name === 'agent-edit')
@@ -137,6 +141,9 @@ async function save(): Promise<void> {
       await agents.update(agentId.value, payload)
     } else {
       await agents.create(payload)
+      // 创建 Agent 会自动建好友与默认会话，同步刷新让列表立刻可见
+      void contacts.load(true)
+      void conversations.refresh()
     }
     void router.push('/agents')
   } catch (error) {

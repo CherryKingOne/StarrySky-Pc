@@ -75,11 +75,18 @@ export interface BotSummary {
   status: 'ACTIVE' | 'DISABLED'
 }
 
-export interface BotItem extends BotSummary {
+export type BotAccessMode = 'WEBSOCKET' | 'WEBHOOK'
+export type BotEventMode = 'ALL' | 'PARTIAL'
+/** 机器人可订阅的事件类型 */
+export type BotEventType = 'MESSAGE_RECEIVED' | 'GROUP_MESSAGE_RECEIVED' | 'MENTIONED'
+
+export interface BotItem extends Omit<BotSummary, 'description'> {
   appId: string
   ownerId: string
-  accessMode: 'WEBSOCKET' | 'WEBHOOK'
-  eventMode: 'ALL' | 'PARTIAL'
+  /** 归属者列表中简介必有值，与会话内的 BotSummary 不同 */
+  description: string
+  accessMode: BotAccessMode
+  eventMode: BotEventMode
   createdAt: string
   updatedAt: string
 }
@@ -96,10 +103,10 @@ export interface BotCredential {
 
 export interface BotEventConfig {
   botId: string
-  accessMode: 'WEBSOCKET' | 'WEBHOOK'
+  accessMode: BotAccessMode
   callbackUrl: string | null
-  eventMode: 'ALL' | 'PARTIAL'
-  eventTypes: string[]
+  eventMode: BotEventMode
+  eventTypes: BotEventType[]
   updatedAt: string
 }
 
@@ -155,11 +162,15 @@ export interface GroupDetail extends GroupItem {
 }
 
 export interface GroupMember {
+  /** 人类成员为 userId，Agent 成员为 agentId */
   userId: string
   role: number
   mutedUntil: string | null
   joinedAt: string
+  /** 人类成员资料；Agent 成员固定为 null */
   profile: ApiUser | null
+  /** Agent 成员摘要；人类成员固定为 null，以 agent != null 判断成员类型 */
+  agent: AgentSummary | null
 }
 
 export interface FileInfo {

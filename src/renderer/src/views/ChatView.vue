@@ -108,6 +108,9 @@ const headerSubtitle = computed(() => {
   if (conversation.targetType === 'BOT') {
     return conversation.bot?.description || '机器人'
   }
+  if (conversation.targetType === 'AGENT') {
+    return conversation.agent?.signature ? `Agent · ${conversation.agent.signature}` : 'Agent'
+  }
   const selfId = app.actingAgent?.agentId ?? app.user?.userId
   if (!conversation.group && conversation.targetUserId === selfId) {
     return '与自己的会话 · 备忘 / 文件传输'
@@ -206,6 +209,11 @@ function onScheduleConfirm(value: string): void {
 
 async function profileAddFriend(): Promise<void> {
   showProfile.value = false
+  // Agent 与归属用户的好友关系在创建 Agent 时已自动建立
+  if (active.value?.agent) {
+    showToast('Agent 好友关系由创建时自动建立，无需重复添加')
+    return
+  }
   const userId = active.value?.targetUserId
   if (!app.accessToken || !userId) return
   try {
@@ -226,6 +234,11 @@ function profileQr(): void {
 
 async function profileBlock(): Promise<void> {
   showProfile.value = false
+  // 拉黑接口只接受有效人类用户
+  if (active.value?.agent) {
+    showToast('暂不支持拉黑 Agent')
+    return
+  }
   const userId = active.value?.targetUserId
   if (!app.accessToken || !userId) return
   try {
@@ -596,6 +609,17 @@ function onInfoProfile(): void {
     }
     showProfile.value = false
     showToast('机器人资料由开发者后台维护')
+    return
+  }
+  // Agent 对端：资料来自会话响应里的 agent 摘要
+  if (active.value?.agent) {
+    profile.value = {
+      name: active.value.agent.nickname,
+      desc: active.value.agent.signature || 'Agent',
+      index: active.value.avatarIndex,
+      userId: active.value.agent.agentId
+    }
+    showProfile.value = true
     return
   }
   profile.value = {

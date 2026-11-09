@@ -97,7 +97,14 @@ function confirm(): void {
             :size="32"
           />
           <div class="min-w-0 flex-1">
-            <p class="truncate text-small text-foreground">{{ person.name }}</p>
+            <p class="truncate text-small text-foreground">
+              {{ person.name
+              }}<span
+                v-if="person.targetType === 'AGENT'"
+                class="ml-1 text-micro text-tertiary-foreground"
+                >Agent</span
+              >
+            </p>
             <p class="truncate text-micro text-tertiary-foreground">{{ person.desc }}</p>
           </div>
           <span

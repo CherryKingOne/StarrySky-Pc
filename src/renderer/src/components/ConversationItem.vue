@@ -7,11 +7,13 @@ import type { Conversation } from '@renderer/types'
 
 const props = defineProps<{ conversation: Conversation; active?: boolean }>()
 const app = useAppStore()
+/** 当前生效身份：用户身份用 userId，Agent 窗口用 agentId（此时 app.user 仍是归属者） */
+const selfId = computed(() => app.actingAgent?.agentId ?? app.user?.userId)
 const isSelf = computed(
   () =>
     !props.conversation.group &&
     !props.conversation.bot &&
-    props.conversation.targetUserId === app.user?.userId
+    props.conversation.targetUserId === selfId.value
 )
 
 const emit = defineEmits<{

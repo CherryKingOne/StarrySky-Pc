@@ -109,7 +109,8 @@ export function mapConversation(item: ConversationItem): Conversation {
     muted: item.muted,
     group: item.type === 2,
     targetType: item.targetType,
-    targetUserId: item.target?.userId ?? item.bot?.botId ?? item.agent?.agentId,
+    // targetId 是服务端给出的对端 ID（用户 / 机器人 / Agent），优先使用
+    targetUserId: item.targetId || item.target?.userId || item.bot?.botId || item.agent?.agentId,
     targetUsername: item.target?.username,
     targetSignature: item.target?.signature ?? item.agent?.signature,
     bot: item.bot ?? undefined,

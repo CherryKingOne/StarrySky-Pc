@@ -51,6 +51,7 @@ export const useContactsStore = defineStore('contacts', {
           const contact = profileToContact(friend.profile ?? fallback, friend.remark)
           return {
             ...contact,
+            targetType: friend.targetType,
             group: contact.name.charAt(0).toUpperCase(),
             desc: contact.desc || '好友',
             createdAt: friend.createdAt

@@ -9,6 +9,7 @@ export function listConversations(token: string, offset = 0): Promise<Conversati
   return apiRequest<ConversationItem[]>(`/conversations${buildQuery({ offset })}`, { token })
 }
 
+/** 打开或创建单聊：targetUserId 可以是人类 userId，也可以是 ACTIVE Agent 的 agentId */
 export function createConversation(token: string, targetUserId: string): Promise<ConversationItem> {
   return apiRequest<ConversationItem>('/conversations', {
     method: 'POST',

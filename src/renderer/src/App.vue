@@ -32,6 +32,21 @@ let unbindRealtime: (() => void) | undefined
 let unbindStatus: (() => void) | undefined
 let broadcastChannel: BroadcastChannel | undefined
 
+/**
+ * 窗口重新获得焦点时刷新会话列表：拉群、入群等成员变化没有 WebSocket 事件，
+ * 不刷新的话新群会话（尤其 Agent 未授权 GROUP 白名单时）不会出现在列表里。
+ */
+let lastFocusRefresh = 0
+function onWindowFocus(): void {
+  if (!app.accessToken || document.visibilityState !== 'visible') return
+  const now = Date.now()
+  if (now - lastFocusRefresh < 5000) return
+  lastFocusRefresh = now
+  void conversations.refresh().catch(() => undefined)
+}
+window.addEventListener('focus', onWindowFocus)
+document.addEventListener('visibilitychange', onWindowFocus)
+
 /** 实时事件频道按身份隔离：用户窗口与 Agent 窗口互不串消息 */
 function realtimeChannelName(): string {
   return `${REALTIME_CHANNEL}:${app.actingAgent?.agentId || 'user'}`
@@ -128,6 +143,8 @@ onBeforeUnmount(() => {
   unbindRealtime?.()
   unbindStatus?.()
   closeBroadcast()
+  window.removeEventListener('focus', onWindowFocus)
+  document.removeEventListener('visibilitychange', onWindowFocus)
 })
 </script>
 

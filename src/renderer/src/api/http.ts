@@ -86,7 +86,7 @@ const ERROR_MESSAGES: Record<number, string> = {
   84004: '机器人已被禁用',
   84005: '机器人 Token 无效',
   86001: 'Agent 不存在或已删除',
-  86002: '当前用户不是该 Agent 的绑定用户',
+  86002: '不是该 Agent 的归属者，无权操作（含拉入群）',
   86003: 'Agent 数量已达上限（最多 5 个）',
   86004: 'Agent 已停用',
   86005: 'userId 是绑定字段，不允许传入或修改',
@@ -176,11 +176,11 @@ async function sendHttp(
   }
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function requestApi<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (options.token) headers.Authorization = `Bearer ${options.token}`
 
-  const result = await sendHttp(`${API_BASE_URL}${path}`, {
+  const result = await sendHttp(url, {
     method: options.method ?? 'GET',
     headers,
     body: options.body,
@@ -188,10 +188,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   })
 
   if (result.status === 0) {
-    throw new ApiError(
-      -2,
-      `无法连接后端服务（${API_BASE_URL}），请检查 .env 中的 IP / 端口以及后端是否启动`
-    )
+    throw new ApiError(-2, `无法连接后端服务（${url}），请检查 .env 中的 IP / 端口以及后端是否启动`)
   }
 
   let envelope: ApiEnvelope<T> | null
@@ -205,7 +202,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (tokenRefresher && options.token) {
       const nextToken = await tokenRefresher()
       if (nextToken) {
-        return apiRequest<T>(path, { ...options, token: nextToken })
+        return requestApi<T>(url, { ...options, token: nextToken })
       }
     }
     const code = envelope?.code ?? 10100
@@ -224,4 +221,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   return envelope.data
+}
+
+/** 请求 /api/v1 下的业务接口 */
+export function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return requestApi<T>(`${API_BASE_URL}${path}`, options)
+}
+
+/** 请求后端根路径下的接口（如 /health），不拼 /api/v1 */
+export function apiOriginRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return requestApi<T>(`${API_ORIGIN}${path}`, options)
 }

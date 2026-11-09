@@ -8,7 +8,15 @@ import SwitchToggle from '@renderer/components/SwitchToggle.vue'
 import Toast from '@renderer/components/Toast.vue'
 import { useAgentsStore } from '@renderer/stores/agents'
 import { useContactsStore } from '@renderer/stores/contacts'
-import { getAgent, type AgentChatPermission, type AgentItem } from '@renderer/api/agents'
+import {
+  exchangeAgentToken,
+  getAgent,
+  type AgentChatPermission,
+  type AgentItem
+} from '@renderer/api/agents'
+import { listFriends } from '@renderer/api/friends'
+import { listGroups } from '@renderer/api/groups'
+import type { FriendEntry, GroupItem } from '@renderer/api/contracts'
 import { avatarIndexOf } from '@renderer/utils/chat'
 
 const REJECT_REPLY_KEY = 'starrysky-agent-reject-reply'
@@ -17,6 +25,11 @@ const route = useRoute()
 const router = useRouter()
 const agents = useAgentsStore()
 const contacts = useContactsStore()
+
+/** Agent 视角的好友与群：授权校验针对 Agent，不能用归属者的通讯录做候选 */
+const agentFriends = ref<FriendEntry[]>([])
+const agentGroups = ref<GroupItem[]>([])
+const ownerUserId = computed(() => agent.value?.userId ?? '')
 
 const agentId = computed(() => String(route.params.agentId ?? ''))
 const agent = ref<AgentItem | null>(null)
@@ -73,40 +86,46 @@ const DEMO_GROUP_OPTIONS = [
   { id: 'demo-group-3', name: '外部合作群', desc: '36 人' }
 ]
 
-/** 可添加的账号：当前账号的好友（后端会校验是否为 Agent 好友，无效返回 86009） */
+/** 可添加的账号：Agent 自己的好友（归属账号默认放行，不需要授权） */
 const userCandidates = computed(() => {
-  if (agents.demo && contacts.friends.length === 0) {
+  if (agents.demo && agentFriends.value.length === 0) {
     return DEMO_USER_OPTIONS.filter((item) => matches(item.name))
       .filter((item) => !isGranted('USER', item.id))
       .map((item) => ({ ...item, avatarIndex: avatarIndexOf(item.name), avatarUrl: null }))
   }
-  return contacts.friends
-    .filter((item) => item.userId && matches(item.name))
-    .filter((item) => !isGranted('USER', item.userId as string))
-    .map((item) => ({
-      id: item.userId as string,
-      name: item.name,
-      desc: item.desc,
-      avatarIndex: item.avatarIndex,
-      avatarUrl: item.avatarUrl ?? null
-    }))
+  return agentFriends.value
+    .filter((friend) => friend.targetType === 'USER' && friend.profile)
+    .filter((friend) => friend.userId !== ownerUserId.value)
+    .filter((friend) => matches(friend.remark || friend.profile?.nickname || friend.userId))
+    .filter((friend) => !isGranted('USER', friend.userId))
+    .map((friend) => {
+      const name = friend.remark || friend.profile?.nickname || friend.userId
+      return {
+        id: friend.userId,
+        name,
+        desc: friend.profile?.signature || '暂无签名',
+        avatarIndex: avatarIndexOf(name),
+        avatarUrl: friend.profile?.avatarUrl ?? null
+      }
+    })
 })
 
+/** 可添加的群聊：Agent 自己加入的群（入群时已自动授权，这里用于撤销后恢复） */
 const groupCandidates = computed(() => {
-  if (agents.demo && contacts.groups.length === 0) {
+  if (agents.demo && agentGroups.value.length === 0) {
     return DEMO_GROUP_OPTIONS.filter((item) => matches(item.name))
       .filter((item) => !isGranted('GROUP', item.id))
       .map((item) => ({ ...item, avatarIndex: avatarIndexOf(item.name), avatarUrl: null }))
   }
-  return contacts.groups
-    .filter((item) => matches(item.name))
-    .filter((item) => !isGranted('GROUP', item.groupId ?? item.id))
-    .map((item) => ({
-      id: item.groupId ?? item.id,
-      name: item.name,
-      desc: `${item.memberCount ?? 0} 人`,
-      avatarIndex: item.avatarIndex,
-      avatarUrl: item.avatarUrl ?? null
+  return agentGroups.value
+    .filter((group) => matches(group.name))
+    .filter((group) => !isGranted('GROUP', group.groupId))
+    .map((group) => ({
+      id: group.groupId,
+      name: group.name,
+      desc: `${group.memberCount ?? 0} 人`,
+      avatarIndex: avatarIndexOf(group.name),
+      avatarUrl: group.avatarUrl ?? null
     }))
 })
 
@@ -127,16 +146,16 @@ const deniedList = computed(() => [
 function nameOf(record: AgentChatPermission): string {
   if (record.target && 'nickname' in record.target) return record.target.nickname
   if (record.target && 'name' in record.target) return record.target.name
-  const person = contacts.friends.find((item) => item.userId === record.targetId)
-  if (person) return person.name
-  const group = contacts.groups.find((item) => (item.groupId ?? item.id) === record.targetId)
+  const friend = agentFriends.value.find((item) => item.userId === record.targetId)
+  if (friend) return friend.remark || friend.profile?.nickname || friend.userId
+  const group = agentGroups.value.find((item) => item.groupId === record.targetId)
   if (group) return group.name
   return demoTarget(record.targetId)?.name ?? record.targetId
 }
 
 function avatarIndexOfRecord(record: AgentChatPermission): number {
-  const person = contacts.friends.find((item) => item.userId === record.targetId)
-  if (person) return person.avatarIndex
+  const friend = agentFriends.value.find((item) => item.userId === record.targetId)
+  if (friend) return avatarIndexOf(friend.remark || friend.profile?.nickname || friend.userId)
   const target = record.target
   if (target && 'nickname' in target) return avatarIndexOf(target.nickname)
   if (target && 'name' in target) return avatarIndexOf(target.name)
@@ -144,8 +163,8 @@ function avatarIndexOfRecord(record: AgentChatPermission): number {
 }
 
 function avatarUrlOf(record: AgentChatPermission): string | null {
-  const person = contacts.friends.find((item) => item.userId === record.targetId)
-  if (person) return person.avatarUrl ?? null
+  const friend = agentFriends.value.find((item) => item.userId === record.targetId)
+  if (friend) return friend.profile?.avatarUrl ?? null
   return record.target?.avatarUrl ?? null
 }
 
@@ -190,6 +209,25 @@ function back(): void {
   void router.push('/agents')
 }
 
+/** 用短期 Agent Token 拉 Agent 视角的好友与群，作为白名单候选 */
+async function loadAgentPerspective(): Promise<void> {
+  if (agents.demo) {
+    await contacts.load().catch(() => undefined)
+    return
+  }
+  try {
+    const token = await exchangeAgentToken(agents.userToken(), agentId.value)
+    const [friends, groups] = await Promise.all([
+      listFriends(token.accessToken),
+      listGroups(token.accessToken)
+    ])
+    agentFriends.value = friends
+    agentGroups.value = groups
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '加载 Agent 通讯录失败')
+  }
+}
+
 async function init(): Promise<void> {
   const cached = agents.list.find((item) => item.agentId === agentId.value)
   if (cached) agent.value = cached
@@ -203,7 +241,7 @@ async function init(): Promise<void> {
   await agents.loadPermissions(agentId.value).catch((error) => {
     showToast(error instanceof Error ? error.message : '加载白名单失败')
   })
-  await contacts.load().catch(() => undefined)
+  await loadAgentPerspective()
 }
 
 onMounted(() => {
@@ -226,7 +264,7 @@ onMounted(() => {
       <div class="min-w-0">
         <h1 class="text-page text-foreground">Agent 设置 · 白名单</h1>
         <p class="text-caption text-tertiary-foreground">
-          只有白名单内的账号与群聊可以主动和它聊天
+          只有白名单内的账号与群聊可以主动和它聊天，归属账号默认放行；被拉入群聊时自动授权该群
         </p>
       </div>
 
@@ -300,8 +338,8 @@ onMounted(() => {
             <p class="px-2 py-1.5 text-caption text-tertiary-foreground">
               {{
                 pickerType === 'USER'
-                  ? '从通讯录选择；需为 Agent 好友，否则服务端返回 86009'
-                  : '从群列表选择；需 Agent 已在群内，否则服务端返回 86009'
+                  ? '从 Agent 的好友中选择；归属账号默认放行，无需添加'
+                  : '从 Agent 已加入的群中选择；入群时已自动授权，此处用于撤销后恢复'
               }}
             </p>
             <p

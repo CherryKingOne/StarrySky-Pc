@@ -34,15 +34,19 @@ const memberCount = computed(() => {
 })
 
 const app = useAppStore()
+/** 当前身份 ID：用户身份用 userId，Agent 身份用 agentId */
+const selfId = computed(() => app.actingAgent?.agentId ?? app.user?.userId)
 const isSelf = computed(
   () =>
     !props.conversation.group &&
     !props.conversation.bot &&
-    props.conversation.targetUserId === app.user?.userId
+    !props.conversation.agent &&
+    props.conversation.targetUserId === selfId.value
 )
 
 const subtitle = computed(() => {
   if (props.conversation.bot) return `机器人 · ${props.conversation.bot.description || '暂无简介'}`
+  if (props.conversation.agent) return `Agent · ${props.conversation.agent.signature || '暂无简介'}`
   if (isSelf.value) return '与自己的会话 · 备忘 / 文件传输'
   if (props.conversation.group) return `${memberCount.value} 位成员`
   return props.conversation.targetSignature || '在线'

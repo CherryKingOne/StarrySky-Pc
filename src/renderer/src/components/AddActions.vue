@@ -48,6 +48,9 @@ defineExpose({ open })
     @close="showFriend = false"
     @sent="emit('friend', $event)"
     @self-chat="emit('selfChat')"
+    @start-chat="
+      emit('start', { userId: $event.userId ?? '', name: $event.name, index: $event.avatarIndex })
+    "
     @toast="emit('toast', $event)"
   />
   <CreateGroupDialog
