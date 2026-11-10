@@ -130,7 +130,7 @@ const items = [
   { key: 'chats', label: '会话', to: '/chats', icon: 'ion:chatboxes' },
   { key: 'contacts', label: '通讯录', to: '/contacts', icon: 'ion:android-contact' },
   { key: 'favorites', label: '收藏', to: '/favorites', icon: 'ion:ios-star' },
-  { key: 'ai', label: 'AI 助手', to: '/ai', icon: 'ion:code-working' }
+  { key: 'moments', label: '朋友圈', to: '/moments', icon: 'ion:ios-photos-outline' }
 ]
 
 const moreItems: MenuItem[] = [

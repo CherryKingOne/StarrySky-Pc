@@ -42,9 +42,9 @@ const router = createRouter({
           component: () => import('@renderer/views/FavoritesView.vue')
         },
         {
-          path: 'ai',
-          name: 'ai',
-          component: () => import('@renderer/views/AiView.vue')
+          path: 'moments',
+          name: 'moments',
+          component: () => import('@renderer/views/MomentsView.vue')
         },
         {
           path: 'files',
@@ -103,7 +103,7 @@ const TITLES: Record<string, string> = {
   chats: '野火IM · 会话',
   contacts: '野火IM · 通讯录',
   favorites: '野火IM · 收藏',
-  ai: '野火IM · AI 助手',
+  moments: '野火IM · 朋友圈',
   files: '野火IM · 文件记录',
   workbench: '野火IM · 工作台',
   search: '野火IM · 聊天记录搜索',
